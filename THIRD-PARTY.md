@@ -11,4 +11,4 @@ Source files kept in this repo, unmodified, so it builds from a clean clone. To 
 
 The YYToolkit headers must match the YYToolkit build the mod runs on. Release v5.0.0c was built from the `experimental` branch, and its headers are not the ones on the default branch.
 
-Not kept in the repo: the Aurie and YYToolkit DLLs that ship in the SlormCore zip. `./build.sh SlormCore package` downloads the official builds and checks each against a pinned SHA-256; see `build.sh` for the links and hashes.
+Not kept in the repo or shipped with the mods: the Aurie and YYToolkit DLLs. Players install them with [SlormAPI](https://github.com/tsotsas/SlormAPI)'s installer, or any other Aurie loader.

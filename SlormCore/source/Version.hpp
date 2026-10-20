@@ -1,6 +1,0 @@
-#pragma once
-
-#define SLORMCORE_MAJOR 1
-#define SLORMCORE_MINOR 0
-#define SLORMCORE_PATCH 0
-#define SLORMCORE_VERSION "1.0.0"

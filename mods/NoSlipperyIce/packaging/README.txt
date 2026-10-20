@@ -3,8 +3,8 @@ Removes the Slippery Ice cataclysm from The Slormancer.
 
 REQUIREMENTS
   The Slormancer on Steam (Windows, 64-bit)
-  SlormCore 1.0.0 or later, installed first:
-  https://github.com/crashv0/SlormMods/releases
+  The Aurie mod loader, installed first. The easiest way is SlormAPI's
+  installer: https://github.com/tsotsas/SlormAPI/releases
   Microsoft Visual C++ 2015-2022 Redistributable (x64). Most PCs already
   have it. If the mod does not load, install it from
   https://aka.ms/vs/17/release/vc_redist.x64.exe

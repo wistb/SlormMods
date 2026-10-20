@@ -5,7 +5,7 @@ SlormReforger
   GNU Affero General Public License v3.0 (AGPL-3.0.txt)
   File: mods\Aurie\SlormReforger.dll
 
-Runs on SlormCore (Aurie Framework and YYToolkit), a separate download.
+Runs on the Aurie Framework and YYToolkit, a separate download.
 
 Dear ImGui v1.91.9b, compiled into SlormReforger.dll
   https://github.com/ocornut/imgui

@@ -1,6 +1,0 @@
-#pragma once
-
-#define SLORMEXAMPLE_MAJOR 0
-#define SLORMEXAMPLE_MINOR 1
-#define SLORMEXAMPLE_PATCH 0
-#define SLORMEXAMPLE_VERSION "0.1.0"

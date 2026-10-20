@@ -5,5 +5,5 @@ NoSlipperyIce
   GNU Affero General Public License v3.0 (AGPL-3.0.txt)
   File: mods\Aurie\NoSlipperyIce.dll
 
-Runs on SlormCore (Aurie Framework and YYToolkit), a separate download.
+Runs on the Aurie Framework and YYToolkit, a separate download.
 
