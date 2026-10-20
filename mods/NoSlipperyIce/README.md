@@ -2,13 +2,13 @@
 
 Removes the Slippery Ice cataclysm from [The Slormancer](https://store.steampowered.com/app/1104280/The_Slormancer/).
 
-The floor is never iced and the hero never slides, wherever the cataclysm would come from: cataclysm breaches, The Great Forge, and the Netherworld places and warlords that always have it. On the Netherworld map those no longer list it. There is nothing to set up.
+The floor is never iced and the hero never slides, wherever the cataclysm would come from: cataclysm breaches, The Great Forge, and the Netherworld places and warlords that always have it. On the Netherworld map those no longer list it. There is nothing to set up. With SlormAPI installed, the mod is listed on the game's MODS page.
 
 ## Install
 
 1. Back up your save: `%LocalAppData%\The_Slormancer`
 2. If the game does not load Aurie mods yet, install the Aurie loader. The easiest way is the installer from [SlormAPI](https://github.com/tsotsas/SlormAPI/releases).
-3. Download the latest `NoSlipperyIce` zip from [Releases](https://github.com/wistb/SlormMods/releases).
+3. Download the latest `NoSlipperyIce` zip from [Releases](https://github.com/wistb/SlormMods/releases) or [Nexus Mods](https://www.nexusmods.com/theslormancer/mods/6).
 4. Extract it into the game folder, so `NoSlipperyIce.dll` lands in `mods\Aurie`.
 5. Start the game from Steam as usual.
 

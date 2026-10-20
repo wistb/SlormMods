@@ -7,7 +7,9 @@ Source files kept in this repo, unmodified, so it builds from a clean clone. To 
 | `include/Aurie/shared.hpp` | [Aurie](https://github.com/AurieFramework/Aurie) `Aurie/source/framework/shared.hpp` | tag `v2.0.2` (`5c4839e`) | AGPL-3.0 |
 | `include/YYToolkit/` | [YYToolkit](https://github.com/AurieFramework/YYToolkit) `YYToolkit/source/YYTK/Shared/` | `experimental` branch at `d5cc007` | AGPL-3.0 |
 | `include/FunctionWrapper/FunctionWrapper.hpp` | YYToolkit `YYToolkit/include/FunctionWrapper/` | `experimental` branch at `d5cc007` | AGPL-3.0 |
+| `include/SlormAPI/SlormAPI_Interface.hpp` | [SlormAPI](https://github.com/tsotsas/SlormAPI) `source/SlormAPI_Interface.hpp` | 1.0.0 (`352a948`) | AGPL-3.0 |
 | `vendor/imgui/` | [Dear ImGui](https://github.com/ocornut/imgui), core files plus the DX11 and Win32 backends | tag `v1.91.9b` | MIT |
+| `mods/SlormSimulator/source/slormapi/` | [SlormAPI](https://github.com/tsotsas/SlormAPI) `source/SlormAPI_Interface.hpp`, `source/Json.hpp` | `352a948` (1.0.0) | AGPL-3.0 |
 
 The YYToolkit headers must match the YYToolkit build the mod runs on. Release v5.0.0c was built from the `experimental` branch, and its headers are not the ones on the default branch.
 

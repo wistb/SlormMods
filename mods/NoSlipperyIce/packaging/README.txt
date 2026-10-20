@@ -20,7 +20,8 @@ INSTALL
 USE
   Nothing to set up. Slippery Ice no longer covers the floor or makes
   you slide, wherever it would come from: cataclysm breaches, places of
-  the Netherworld that always have it, and The Great Forge.
+  the Netherworld that always have it, and The Great Forge. With
+  SlormAPI installed, the mod is listed on the game's MODS page.
 
 UNINSTALL
   Delete mods\Aurie\NoSlipperyIce.dll and NoSlipperyIce-README.txt

@@ -1,6 +1,7 @@
 // Slippery Ice never takes effect: the game is told the cataclysm is not active, and it is
 // taken off the run's lists and the Netherworld's table so it is not shown either.
 #include <YYToolkit/YYTK_Shared.hpp>
+#include <SlormAPI/SlormAPI_Interface.hpp>
 #include "Version.hpp"
 using namespace Aurie;
 using namespace YYTK;
@@ -133,6 +134,24 @@ static RValue& CheckActiveHook(CInstance* Self, CInstance* Other, RValue& Result
 	return Result;
 }
 
+// With SlormAPI installed the mod is listed on the game's MODS page; it works without it.
+static void CodeCallback(FWCodeEvent& Event)
+{
+	static bool asked = false;
+	if (asked)
+		return;
+	auto& [self, other, code, argument_count, arguments] = Event.Arguments();
+	if (!code || !code->GetName() || std::string_view(code->GetName()) != "gml_Object_obj_ui_next_gen_Step_0")
+		return;
+	// Modules load in any order, so SlormAPI is looked for once the game runs.
+	asked = true;
+	AurieInterfaceBase* base = nullptr;
+	if (!AurieSuccess(ObGetInterface(SLORMAPI_INTERFACE_NAME, base)) || !base)
+		return;
+	const char* response = static_cast<SlormAPIInterface*>(base)->Request(R"({"cmd":"register_mod","name":"NoSlipperyIce","version":")" NOSLIPPERYICE_VERSION R"(","author":"Crash","description":"Removes the Slippery Ice cataclysm","requires":{"SlormAPI":"1.0.0"}})");
+	Log("registered with SlormAPI: %s", response);
+}
+
 static AurieStatus Hook(AurieModule* Module, const char* Name, PVOID Replacement, PFUNC_YYGMLScript* Original)
 {
 	CScript* script = nullptr;
@@ -162,6 +181,8 @@ EXPORTED AurieStatus ModuleInitialize(
 	// Without these the ice is still gone; only the Netherworld's map would go on naming it.
 	if (!AurieSuccess(Hook(Module, "scr_load_tables", LoadTablesHook, &g_LoadTables)) | !AurieSuccess(Hook(Module, "scr_ui_menus_launcher", LauncherHook, &g_Launcher)))
 		Log("a table hook failed, the Netherworld's map may still name Slippery Ice");
+	if (!AurieSuccess(g_Yytk->CreateCallback(Module, EVENT_OBJECT_CALL, CodeCallback, 0)))
+		Log("the step callback failed, the mod is not listed on SlormAPI's MODS page");
 
 	Log("v" NOSLIPPERYICE_VERSION " loaded");
 	return AURIE_SUCCESS;
