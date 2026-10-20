@@ -118,6 +118,9 @@ bool AimAt(double X, double Y, int Milliseconds);
 bool AimStep(double X, double Y);
 // Called as a script of the hero's step is entered (1) and left (-1).
 void WalkScript(int Enter);
+// The way on foot between two places of an expedition's floor, as the places to walk by one after
+// the other, the last being where to; empty when the bot has not read the floor or it has no way.
+std::vector<std::pair<double, double>> FloorRoute(double FromX, double FromY, double ToX, double ToY);
 // The floor bot's presses, made for the hero from the input hook.
 void BotInput(YYTK::CInstance* Hero);
 

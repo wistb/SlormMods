@@ -3,6 +3,7 @@
 // the click is pressed on the hero. Driven from the input hook, once a step of the hero.
 #include "Suite.hpp"
 #include <cmath>
+#include <vector>
 using namespace Aurie;
 using namespace YYTK;
 
@@ -37,6 +38,33 @@ namespace
 	ULONGLONG g_AsideAt = 0;
 	double g_AsideX = 0, g_AsideY = 0;
 	int g_Steps = 0, g_Unstarted = 0;
+	// The places to walk by on the way, the last being where to, and the one being walked to. One
+	// is left for the next from this near. Without the floor's way, where to is all there is.
+	std::vector<std::pair<double, double>> g_Route;
+	size_t g_Leg = 0;
+	constexpr double PASS = 40;
+	// Where the way was last found anew for a hero that stopped; stopped there again, it steps aside.
+	bool g_Stopped = false;
+	double g_StopX = 0, g_StopY = 0;
+	constexpr double SAME = 32;
+
+	void Plan(double X, double Y)
+	{
+		g_Route = FloorRoute(X, Y, g_Walk.x, g_Walk.y);
+		if (g_Route.empty())
+			g_Route.push_back({ g_Walk.x, g_Walk.y });
+		g_Leg = 0;
+		if (g_Route.size() < 2)
+			return;
+		std::string by;
+		char text[32];
+		for (size_t i = 0; i + 1 < g_Route.size(); i++)
+		{
+			snprintf(text, sizeof(text), " %.0f,%.0f", g_Route[i].first, g_Route[i].second);
+			by += text;
+		}
+		Log("walk: by%s", by.c_str());
+	}
 
 	void End(int State, const char* Why, double X, double Y)
 	{
@@ -175,10 +203,11 @@ void WalkInput(CInstance* Hero)
 		g_StartedAt = g_TryAt = g_MovedAt = g_LookedAt = now;
 		g_IdleAt = g_AsideAt = 0;
 		g_Steps = g_Unstarted = 0;
-		g_Stuck = false;
+		g_Stuck = g_Stopped = false;
 		g_LastX = g_LookX = x;
 		g_LastY = g_LookY = y;
 		Log("walk: from %.0f %.0f to %.0f %.0f in %s", x, y, g_Walk.x, g_Walk.y, RoomName().c_str());
+		Plan(x, y);
 	}
 	double away = hypot(g_Walk.x - x, g_Walk.y - y);
 	if (state == "dead" || ToNumber(Local(Hero, "enable_input")) < 1)
@@ -214,11 +243,18 @@ void WalkInput(CInstance* Hero)
 		g_Stuck = false;
 		g_LookX = x;
 		g_LookY = y;
+		Plan(x, y);
 	}
+	// Near a place on the way, the next one is clicked while the hero still walks.
+	bool passed = false;
+	while (g_Leg + 1 < g_Route.size() && hypot(g_Route[g_Leg].first - x, g_Route[g_Leg].second - y) <= PASS)
+		g_Leg++, passed = true;
+	if (passed)
+		g_TryAt = now;
 	// The click: held a moment, then the game walks on by itself.
 	if (now - g_TryAt < PRESS_MS)
 	{
-		if (!AimStep(g_Walk.x, g_Walk.y))
+		if (!AimStep(g_Route[g_Leg].first, g_Route[g_Leg].second))
 			return End(WALK_FAILED, "no view of the room", x, y);
 		if (now - g_TryAt >= AHEAD_MS)
 			set("ctm_key", 1);
@@ -250,7 +286,30 @@ void WalkInput(CInstance* Hero)
 	if (g_Steps >= STEPS)
 		return End(WALK_FAILED, why, x, y);
 	g_Walk.tries++;
-	// Stuck or stopped short, the hero steps aside before it is sent on.
+	// A skill cast on the way stops the hero where nothing is in his way: stopped short further on
+	// than the last time, he is only sent on. Stuck where the floor knows the way, it is found anew.
+	if (g_Walk.state != WALK_STARTING && !(g_Stopped && hypot(x - g_StopX, y - g_StopY) < SAME))
+	{
+		size_t legs = g_Route.size();
+		bool stuck = g_Stuck;
+		g_Stopped = true;
+		g_StopX = x;
+		g_StopY = y;
+		Plan(x, y);
+		if (!stuck || legs > 1 || g_Route.size() > 1)
+		{
+			g_Steps += stuck ? 1 : 0;
+			Log("walk: %s at %.0f %.0f, %.0f away; sent on, try %d", why, x, y, away, g_Walk.tries);
+			g_Walk.state = WALK_STARTING;
+			g_TryAt = g_MovedAt = g_LookedAt = now;
+			g_IdleAt = 0;
+			g_Stuck = false;
+			g_LookX = x;
+			g_LookY = y;
+			return;
+		}
+	}
+	// Otherwise the hero steps aside before it is sent on.
 	if (g_Walk.state != WALK_STARTING && away > 1)
 	{
 		double turn = (atan2(g_Walk.y - y, g_Walk.x - x) * 180 / 3.14159265358979 + TURNS[g_Steps % 9]) * 3.14159265358979 / 180;

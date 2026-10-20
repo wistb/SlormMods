@@ -25,8 +25,9 @@ On the Farm tab. Plays expeditions for the hero, start to finish, and goes again
 - **The Slorm Temple.** Closes every breach of a floor, room after room, picks up pure slorm left on the ground, uses the shrine and takes the door. Can start each expedition on a floor you set.
 - **The Great Forge.** Starts each wave, fights to the wave you set, opens the War Chest, picks up what it held and heads home. Needs "Auto pick Great Forge paths" on. The hero can hold the center of the room.
 - **The Netherworld.** Runs the warlord or place you choose, or the one with the largest share of its rewards in the gear slots you want, in the ordinary or the Primordial Netherworld. Can run the place that gives double Nether Charge until the charge reaches a number you set, then the warlord. Closes breaches until the bar is full or the warlord is called, fights him, opens his chest and heads home.
-- **A warlord's chest.** The pick is left to you, or made for you: a Nether item first, then by your slot priority, then a random one or the one worth the most goldus. Slorm can be spent on rolling offers again, until a wanted slot or a Nether item is on offer, while a reserve you set is kept.
-- **Loot.** Picks up what drops within a range. A log lists it, reapers by name, with a switch for each kind of item.
+- **A warlord's chest.** The pick is left to you, or made for you: a Nether item first, then by your slot priority, then a random one or the one worth the most goldus. Slorm can be spent on rolling every offer that is not a Nether item again, while a reserve you set is kept. With no Nether item on offer, the expedition can be abandoned instead, which leaves the warlords' rewards as they are; this can be kept to warlords with at least a number you set of rewards in your wanted slots.
+- **Walking.** Finds the way round walls on the floor's map, and turns to the next place without stopping.
+- **Loot.** Picks up what drops within a range; on the way to a breach, only what the detour keeps within it. A log lists it, reapers by name, with a switch for each kind of item.
 - **Limits.** Stop after a number of expeditions, head home after a number of Battlefield or temple floors, and stop when the bag is full.
 
 ### Auto pick Great Forge paths

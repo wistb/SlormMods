@@ -28,7 +28,7 @@ namespace
 	constexpr double ON_BREACH = 28;
 	// The door can be had once all but this many breaches are closed.
 	constexpr int SPARE = 5;
-	constexpr ULONGLONG ACT_MS = 700, GIVE_UP_MS = 120000, SKIP_MS = 45000;
+	constexpr ULONGLONG ACT_MS = 700, TURN_MS = 150, GIVE_UP_MS = 120000, SKIP_MS = 45000;
 
 	// What the hero has picked up, newest last; the same thing again is counted on its line.
 	enum LootKind { LOOT_STUFF, LOOT_GEAR, LOOT_REAPER };
@@ -69,14 +69,17 @@ namespace
 		float nether_until = 0;
 		// The pick from a warlord's chest is made for the player: a Nether item first, then by these.
 		bool nether_pick = false;
+		// With no Nether item on offer nothing is taken and the expedition is abandoned, so that the
+		// warlords keep their rewards; a win changes them.
+		bool nether_leave = false;
+		// Only while the warlord has at least this many rewards for the wanted slots; with fewer the pick is made.
+		int nether_leave_min = 0;
 		// Gear slots, the most wanted first; counted for Nether items only when asked.
 		int nether_slots[10] = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 };
 		bool nether_slots_nether = false;
-		// With no Nether item and none of the first so many slots on offer, slorm is spent on rolling
-		// offers again, while at least this much slorm is kept.
+		// Slorm is spent on rolling every offer that is not a Nether item again, to see every Nether item
+		// there is to have, while at least this much slorm is kept.
 		bool nether_reroll = false;
-		// Rolls go on until a Nether item is on offer, whatever the slots.
-		bool nether_reroll_nether = false;
 		int nether_wanted = 3;
 		float nether_keep = 1000000;
 		// Between what is left: 0 any of them, 1 the one worth the most goldus.
@@ -246,10 +249,12 @@ namespace
 		return state == WALK_STARTING || state == WALK_WALKING;
 	}
 
-	// A walk asked for now, unless one is on its way or one was asked for a moment ago.
-	bool Go(const Place& To, ULONGLONG Now, double Reach = 24)
+	// A walk asked for now, unless one is on its way or one was asked for a moment ago. With Instead,
+	// a walk to somewhere else is turned to this place without the hero standing still in between.
+	bool Go(const Place& To, ULONGLONG Now, double Reach = 24, bool Instead = false)
 	{
-		if (Busy() || Now - g_ActAt < ACT_MS)
+		bool elsewhere = Instead && Far(To, { WalkStatus().x, WalkStatus().y }) > 4;
+		if ((Busy() && !elsewhere) || Now - g_ActAt < (elsewhere ? TURN_MS : ACT_MS))
 			return false;
 		g_ActAt = Now;
 		WalkTo(To.x, To.y, false, Reach);
@@ -314,9 +319,15 @@ namespace
 		int width = 0, height = 0;
 		double cell = 16;
 		std::vector<char> open;
+		// Open, with a wall on a cell next to it.
+		std::vector<char> walled;
 	};
 	Floor g_Floor;
 	constexpr float NO_WAY = 1e9f;
+	// How much longer a step by a wall counts on the way to a place, so the way keeps off the walls.
+	constexpr float BY_WALL = 3;
+	// A hero stops this far above where he is sent.
+	constexpr double FEET = 18;
 
 	void ReadFloor(CInstance* Self)
 	{
@@ -337,6 +348,16 @@ namespace
 		for (int down = 0; down < height; down++)
 			for (int across = 0; across < width; across++)
 				g_Floor.open[down * width + across] = ToNumber(g_Yytk->CallBuiltin("ds_grid_get", { grid, RValue(static_cast<double>(across)), RValue(static_cast<double>(down)) })) > 0;
+		g_Floor.walled.resize(g_Floor.open.size());
+		for (int down = 0; down < height; down++)
+			for (int across = 0; across < width; across++)
+				for (int dy = -1; dy <= 1; dy++)
+					for (int dx = -1; dx <= 1; dx++)
+					{
+						int x = across + dx, y = down + dy;
+						if (x < 0 || y < 0 || x >= width || y >= height || !g_Floor.open[y * width + x])
+							g_Floor.walled[down * width + across] = 1;
+					}
 		Log("bot: floor read, %d x %d cells of %.0f", width, height, g_Floor.cell);
 	}
 
@@ -402,6 +423,112 @@ namespace
 		return dist;
 	}
 
+	// Whether a place is on the floor, and the middle of a cell of it.
+	bool Open(const Place& At)
+	{
+		int across = static_cast<int>(floor(At.x / g_Floor.cell)), down = static_cast<int>(floor(At.y / g_Floor.cell));
+		return across >= 0 && down >= 0 && across < g_Floor.width && down < g_Floor.height && g_Floor.open[down * g_Floor.width + across];
+	}
+	Place Middle(int Cell) { return { (Cell % g_Floor.width + 0.5) * g_Floor.cell, (Cell / g_Floor.width + 0.5) * g_Floor.cell }; }
+
+	// The cells walked through from one place to another, the shortest way; empty when there is none.
+	std::vector<int> Way(const Place& From, const Place& To)
+	{
+		std::vector<int> way;
+		int start = Cell(From), goal = Cell(To);
+		if (start < 0 || goal < 0)
+			return way;
+		int width = g_Floor.width, height = g_Floor.height;
+		float step = static_cast<float>(g_Floor.cell);
+		std::vector<float> dist(g_Floor.open.size(), NO_WAY);
+		std::vector<int> came(g_Floor.open.size(), -1);
+		auto left = [&](int At) { return step * static_cast<float>(hypot(At % width - goal % width, At / width - goal / width)); };
+		std::priority_queue<std::pair<float, int>, std::vector<std::pair<float, int>>, std::greater<>> next;
+		dist[start] = 0;
+		next.push({ left(start), start });
+		while (!next.empty())
+		{
+			auto [guess, at] = next.top();
+			next.pop();
+			if (at == goal)
+				break;
+			if (guess > dist[at] + left(at) + 0.01f)
+				continue;
+			int x = at % width, y = at / width;
+			for (int dy = -1; dy <= 1; dy++)
+				for (int dx = -1; dx <= 1; dx++)
+				{
+					int nx = x + dx, ny = y + dy, to_cell = ny * width + nx;
+					if ((!dx && !dy) || nx < 0 || ny < 0 || nx >= width || ny >= height || !g_Floor.open[to_cell])
+						continue;
+					// No cutting a corner of a wall.
+					if (dx && dy && (!g_Floor.open[y * width + nx] || !g_Floor.open[ny * width + x]))
+						continue;
+					float to = dist[at] + step * (dx && dy ? 1.41421f : 1.0f) * (g_Floor.walled[to_cell] ? BY_WALL : 1.0f);
+					if (to < dist[to_cell])
+					{
+						dist[to_cell] = to;
+						came[to_cell] = at;
+						next.push({ to + left(to_cell), to_cell });
+					}
+				}
+		}
+		if (dist[goal] >= NO_WAY)
+			return way;
+		for (int at = goal; at >= 0; at = came[at])
+			way.push_back(at);
+		std::reverse(way.begin(), way.end());
+		return way;
+	}
+
+	// A straight walk between two places stays on the floor; Wide, with most of half a cell to spare on each side.
+	bool Straight(const Place& A, const Place& B, bool Wide)
+	{
+		double length = Far(A, B), half = g_Floor.cell / 2;
+		int steps = (std::max)(1, static_cast<int>(ceil(length / half)));
+		double side_x = length > 0 ? -(B.y - A.y) / length * half * 0.9 : 0, side_y = length > 0 ? (B.x - A.x) / length * half * 0.9 : 0;
+		for (int i = 0; i <= steps; i++)
+		{
+			Place at = { A.x + (B.x - A.x) * i / steps, A.y + (B.y - A.y) * i / steps };
+			if (!Open(at) || (Wide && (!Open({ at.x + side_x, at.y + side_y }) || !Open({ at.x - side_x, at.y - side_y }))))
+				return false;
+		}
+		return true;
+	}
+}
+
+std::vector<std::pair<double, double>> FloorRoute(double FromX, double FromY, double ToX, double ToY)
+{
+	std::vector<std::pair<double, double>> route;
+	std::vector<int> way = Way({ FromX, FromY }, { ToX, ToY });
+	if (way.empty())
+		return route;
+	// From each corner on, the furthest cell of the way that is a straight walk off; a few that are
+	// not are looked past. With room to spare where there is any.
+	Place at = { FromX, FromY };
+	for (size_t i = 0; i + 1 < way.size();)
+	{
+		size_t next = i + 1;
+		for (int wide = 1; wide >= 0 && next == i + 1; wide--)
+			for (size_t j = i + 2, missed = 0; j < way.size() && missed < 8; j++)
+			{
+				if (Straight(at, Middle(way[j]), wide > 0))
+					next = j, missed = 0;
+				else
+					missed++;
+			}
+		i = next;
+		if (i + 1 >= way.size())
+			break;
+		at = Middle(way[i]);
+		route.push_back({ at.x, at.y + (Open({ at.x, at.y + FEET }) ? FEET : 0) });
+	}
+	route.push_back({ ToX, ToY });
+	return route;
+}
+
+namespace
+{
 	// How far it is on foot from each breach, kept for the floor: breaches do not move.
 	std::map<long long, std::vector<float>> g_From;
 
@@ -556,10 +683,10 @@ namespace
 	ULONGLONG g_LootSince = 0, g_LootNearAt = 0, g_LootPlanned = 0, g_PickUntil = 0;
 	constexpr double PICK = 44;
 
-	// True while loot is being seen to; the breaches wait.
-	bool Loot(const Place& Me, ULONGLONG Now)
+	// True while loot is being seen to; the breaches wait. With Near, whatever lies by that place is taken, whatever the setting.
+	bool Loot(const Place& Me, ULONGLONG Now, const Place* Near = nullptr)
 	{
-		if (!g_Farm.loot)
+		if (!g_Farm.loot && !Near)
 			return false;
 		RValue object = g_Yytk->CallBuiltin("asset_get_index", { RValue("obj_loot") });
 		int count = static_cast<int>(ToNumber(g_Yytk->CallBuiltin("instance_number", { object })));
@@ -581,26 +708,36 @@ namespace
 				there = true;
 				g_LootAt = at;
 			}
-			if (g_NoLoot.find(id) == g_NoLoot.end())
+			if (g_NoLoot.find(id) == g_NoLoot.end() && (!Near || Far(*Near, at) <= 300))
 				lying.push_back({ id, at });
 		}
 		if (g_Loot && !there)
 		{
 			Log("bot: loot %.0f picked up after %.1f s", g_Loot, (Now - g_LootSince) / 1000.0);
 			g_Loot = 0;
+			// The next one is looked for at once, before the hero sets off for the breach.
+			g_LootPlanned = 0;
 		}
 		if (!g_Loot)
 		{
 			if (lying.empty() || Now - g_LootPlanned < 400)
 				return false;
 			g_LootPlanned = Now;
-			bool floor = g_Floor.width > 0 && Cell(Me) >= 0;
+			bool floor = !Near && g_Floor.width > 0 && Cell(Me) >= 0;
 			std::vector<float> walked = floor ? Walked(Me) : std::vector<float>();
-			float best = static_cast<float>(g_Farm.loot_range);
+			float best = Near ? NO_WAY : static_cast<float>(g_Farm.loot_range);
+			// On the way to a breach the range is what the loot adds to the walk there, so that the
+			// hero does not turn far back for it.
+			bool bound = !Near && g_Has && !g_Reached;
+			auto from_breach = floor ? g_From.find(Key(g_Breach)) : g_From.end();
+			auto to_breach = [&](const Place& At, int In) { return from_breach != g_From.end() ? (In < 0 ? NO_WAY : from_breach->second[In]) : static_cast<float>(Far(At, g_Breach)); };
+			float straight = bound ? to_breach(Me, floor ? Cell(Me) : -1) : 0;
 			for (const auto& [id, at] : lying)
 			{
 				int cell = floor ? Cell(at) : -1;
 				float away = !floor ? static_cast<float>(Far(Me, at)) : cell < 0 ? NO_WAY : walked[cell];
+				if (bound && away < NO_WAY && away + to_breach(at, cell) - straight > g_Farm.loot_range)
+					continue;
 				if (away <= best)
 				{
 					best = away;
@@ -631,10 +768,8 @@ namespace
 			g_PickUntil = Now + 150;
 		else
 		{
-			// A walk to somewhere else is given up first. A walk ends above where it was clicked.
-			if (Busy() && Far({ WalkStatus().x, WalkStatus().y }, { g_LootAt.x, g_LootAt.y + 14 }) > 4)
-				WalkStop();
-			Go({ g_LootAt.x, g_LootAt.y + 14 }, Now, 20);
+			// A walk to somewhere else is turned to it. A walk ends above where it was clicked.
+			Go({ g_LootAt.x, g_LootAt.y + 14 }, Now, 20, true);
 		}
 		return true;
 	}
@@ -655,6 +790,8 @@ static int g_Clicks = 0;
 // The reaper just picked up, -1 for none, and when.
 static double g_Reaper = -1;
 static ULONGLONG g_ReaperAt = 0;
+// When equipment was last picked up.
+static ULONGLONG g_GearAt = 0;
 
 // What is picked up comes as a list whose first entry says what it is: a reaper is { rarity, which, "", "weapon", ... }.
 static void Picked(const RValue& Item)
@@ -687,7 +824,7 @@ static void Picked(const RValue& Item)
 		Log("bot: reaper %d is %s (hero %s)", which, line.text.c_str(), kind.c_str());
 	}
 	else if (what == "equipment")
-		line = { ToText(head[0]) + " " + ToText(head[1]), LOOT_GEAR };
+		g_GearAt = GetTickCount64(), line = { ToText(head[0]) + " " + ToText(head[1]), LOOT_GEAR };
 	else
 		line = { what, LOOT_STUFF };
 	if (!line.text.empty())
@@ -1156,6 +1293,10 @@ static int BestWarlord()
 	return best;
 }
 
+// The warlord the bot started on, -1 when it did not start the expedition; cleared once the hero is back in town.
+static int g_WarlordRun = -1;
+static bool g_OutOfTown = false;
+
 // The launcher shows the Netherworld's map: its buttons are the warlords.
 static bool NetherMap(CInstance* Self)
 {
@@ -1252,6 +1393,7 @@ static void Hub(CInstance* Self, CInstance* Hero, ULONGLONG Now)
 				Log("bot: warlord %d asked for, %s%s; the launcher had %d", warlord, WarlordName(warlord).c_str(), marked >= 0 ? ", the one with double Nether Charge" : best >= 0 ? ", the one with the largest share of rewards in the wanted slots" : "", chosen);
 				return Say("choosing the warlord");
 			}
+			g_WarlordRun = warlord;
 			Log("bot: starting on warlord %d, %s, primordial %d, nether charge %.1f", warlord, WarlordName(warlord).c_str(), primordial ? 1 : 0, ToNumber(Global("nether_charge")));
 		}
 		if (step == 1 && g_Farm.mode == 2 && g_Farm.temple_floor > 0)
@@ -1400,9 +1542,6 @@ static int RerollReward(CInstance* Self, const std::vector<Offer>& All, double C
 {
 	if (!g_Farm.nether_reroll || All.empty())
 		return -1;
-	for (const Offer& offer : All)
-		if (offer.nether || (!g_Farm.nether_reroll_nether && offer.rank < g_Farm.nether_wanted))
-			return -1;
 	RValue slorms = Global("essence"), done = Local(Self, "war_reward_reroll");
 	int who = static_cast<int>(ToNumber(Global("current_hero")));
 	std::vector<RValue> held = slorms.IsArray() ? slorms.ToVector() : std::vector<RValue>(), rolled = done.IsArray() ? done.ToVector() : std::vector<RValue>();
@@ -1410,7 +1549,7 @@ static int RerollReward(CInstance* Self, const std::vector<Offer>& All, double C
 		return -1;
 	int worst = -1, rank = -1;
 	for (const Offer& offer : All)
-		if (offer.at < static_cast<int>(rolled.size()) && ToNumber(rolled[offer.at]) < 1 && offer.rank > rank)
+		if (offer.at < static_cast<int>(rolled.size()) && ToNumber(rolled[offer.at]) < 1 && !offer.nether && offer.rank > rank)
 			worst = offer.at, rank = offer.rank;
 	return worst;
 }
@@ -1470,18 +1609,35 @@ static RValue& ChooseHook(CInstance* Self, CInstance* Other, RValue& Result, int
 static void Warlord(CInstance* Self, CInstance* Hero, CInstance* Level, const Place& Me, ULONGLONG Now)
 {
 	static ULONGLONG acted = 0, picking_at = 0;
+	static Place chest_at;
+	static bool told = false, leave = false;
 	// A floor just come to.
 	if (g_Closed != -2)
 	{
 		g_Closed = -2;
 		Rest();
 		acted = picking_at = 0;
+		chest_at = {};
+		told = leave = false;
 		g_WarlordPicked = false;
 		Log("bot: the warlord's floor, the hero at %.0f %.0f", Me.x, Me.y);
 #ifdef SLORM_DEV
 		g_Dev.dump_note = "warlord floor";
 		g_Dev.want_dump = true;
 #endif
+	}
+	// Abandoned as the game's own menu does it.
+	if (leave)
+	{
+		g_Attack = false;
+		if (Busy()) WalkStop();
+		if (Now > acted + 1500)
+		{
+			acted = Now;
+			Log("bot: abandoning the expedition with scr_run_end(\"leave\")");
+			Call(Self, "scr_run_end", { RValue("leave") });
+		}
+		return Say("abandoning the expedition");
 	}
 	if (ToText(Local(Self, "menu_show")) == "rewards")
 	{
@@ -1515,9 +1671,35 @@ static void Warlord(CInstance* Self, CInstance* Hero, CInstance* Level, const Pl
 			if (again >= 0)
 			{
 				had = has;
-				Log("bot: %s on offer, rolling offer %d again", g_Farm.nether_reroll_nether ? "no Nether item" : "nothing wanted", again + 1);
+				Log("bot: rolling offer %d again", again + 1);
 				Call(Self, "scr_ui_menu_warlords_reward_reroll", { RValue(static_cast<double>(again)) });
 				return Say("rolling an offer again");
+			}
+			// Nothing is taken when the expedition is to be abandoned: the menu is put away first.
+			leave = g_Farm.nether_leave && !offers.empty();
+			for (const Offer& each : offers)
+				if (each.nether) leave = false;
+			// A warlord with too little for the wanted slots is not worth keeping as he is.
+			int wanted = 0, in_all = 0;
+			if (leave && g_WarlordRun < 0 && g_Farm.nether_leave_min > 0)
+			{
+				leave = false;
+				Log("bot: no Nether item on offer, but the bot did not start this expedition and cannot count the warlord's rewards: an offer is taken");
+			}
+			if (leave && g_WarlordRun >= 0)
+			{
+				WantedRewards(g_WarlordRun, wanted, in_all);
+				if (wanted < g_Farm.nether_leave_min)
+				{
+					leave = false;
+					Log("bot: no Nether item on offer, but warlord %d has %d of %d rewards wanted, under %d: an offer is taken", g_WarlordRun, wanted, in_all, g_Farm.nether_leave_min);
+				}
+			}
+			if (leave)
+			{
+				Log("bot: no Nether item on offer, warlord %d has %d of %d rewards wanted: nothing is taken and the expedition is abandoned", g_WarlordRun, wanted, in_all);
+				Call(Self, "scr_ui_menu_close_button");
+				return Say("abandoning the expedition");
 			}
 			int offer = PickReward(offers);
 			if (offer >= 0)
@@ -1531,7 +1713,7 @@ static void Warlord(CInstance* Self, CInstance* Hero, CInstance* Level, const Pl
 	if (chest)
 	{
 		g_Attack = false;
-		Place at = { ToNumber(Local(chest, "x")), ToNumber(Local(chest, "y")) };
+		Place at = chest_at = { ToNumber(Local(chest, "x")), ToNumber(Local(chest, "y")) };
 		double away = Far(Me, at);
 		Say("opening the warlord's chest");
 		// Used from the hero's side of it; a pick put away unmade is put up again after a moment.
@@ -1549,15 +1731,19 @@ static void Warlord(CInstance* Self, CInstance* Hero, CInstance* Level, const Pl
 	{
 		g_Attack = false;
 		Place at = { ToNumber(Local(door, "x")), ToNumber(Local(door, "y")) };
-		// What was picked falls out of the chest a moment later and is picked up first, whatever the loot setting.
-		bool loot = g_Farm.loot;
-		g_Farm.loot = true;
-		bool taking = Loot(Me, Now);
-		g_Farm.loot = loot;
-		if (taking)
+		// What was picked falls out of the chest a moment later; the door waits until it is picked up.
+		if (g_WarlordPicked && !chest_at.x)
+			chest_at = at;
+		if (g_WarlordPicked && Loot(Me, Now, &chest_at))
 			return;
-		if (g_WarlordPicked && Now - g_WarlordPickedAt < 2500)
-			return Say("waiting for what the chest gives");
+		if (g_WarlordPicked && !told)
+		{
+			bool got = g_GearAt > g_WarlordPickedAt;
+			if (Now - g_WarlordPickedAt < (got ? 3500 : 12000))
+				return Say("waiting for what the chest gives");
+			told = true;
+			Log("bot: %s, %.1f s after the pick", got ? "the equipment was picked up" : "nothing from the chest was picked up", (Now - g_WarlordPickedAt) / 1000.0);
+		}
 		Say("heading home");
 		if (Far(Me, at) > 80)
 			Go({ at.x, at.y + 30 }, Now, 30);
@@ -1649,6 +1835,11 @@ static void BotTick(CInstance* Self)
 	if (key_down && !key_was_down)
 		g_Farm.on = !g_Farm.on;
 	key_was_down = key_down;
+	// Watched with the bot off too: an expedition started by hand is not the bot's.
+	std::string room = RoomName();
+	if (room == "rm_the_hub" && g_OutOfTown)
+		g_WarlordRun = -1;
+	g_OutOfTown = room == "rm_procedural" || (g_OutOfTown && room != "rm_the_hub");
 	if (!g_Farm.on)
 	{
 		if (was_on)
@@ -2036,7 +2227,8 @@ static void BotTick(CInstance* Self)
 			Log("bot: off the bridge's line at %.0f %.0f on the way to %.0f %.0f, lining up again", me.x, me.y, g_Breach.x, g_Breach.y);
 			WalkStop();
 		}
-		if (Go(to, now))
+		// A walk still on its way to an enemy or to the breach before is turned to this one.
+		if (Go(to, now, 24, Far(to, g_Breach) < 1))
 			g_Walking = true;
 		snprintf(text, sizeof(text), "walking to the breach at %.0f %.0f", g_Breach.x, g_Breach.y);
 		return Say(text);
@@ -2239,10 +2431,70 @@ namespace
 					return WarlordName(Which) + (g_Farm.nether_primordial && NamedWarlord(Which) ? "  (warlord)" : "") + (Which == marked ? "  (double Nether Charge)" : "");
 				};
 				int best = g_Farm.nether_best ? BestWarlord() : -1;
-				ImGui::BeginDisabled(best >= 0 || (g_Farm.nether_double && marked >= 0 && g_Farm.nether_until <= 0));
+				int own = best >= 0 ? best : g_Farm.nether_warlord;
+				double charge = ToNumber(Global("nether_charge"));
+				// The double charge run goes first while the charge is short of what is asked for.
+				bool doubled = g_Farm.nether_double && marked >= 0;
+				bool charging = doubled && (g_Farm.nether_until <= 0 || charge < g_Farm.nether_until);
+				float column = 90 * g_Appearance.scale;
+				auto line = [&](const char* Head, int Which, const char* Why) {
+					ImGui::TextDisabled("%s", Head);
+					ImGui::SameLine(column);
+					ImGui::TextUnformatted(WarlordName(Which).c_str());
+					if (*Why)
+					{
+						ImGui::SameLine();
+						ImGui::TextDisabled("%s", Why);
+					}
+					// What it gives for the wanted slots, in green; a place of the Primordial Netherworld has no chest.
+					std::string tags = g_Farm.nether_primordial && !NamedWarlord(Which) ? "" : RewardTags(Which);
+					if (!tags.empty())
+					{
+						ImGui::SameLine();
+						ImGui::TextColored({ 0.45f, 0.9f, 0.45f, 1.0f }, "%s", tags.c_str());
+					}
+				};
+				if (count)
+				{
+					char why[64] = "";
+					if (charging && g_Farm.nether_until > 0)
+						snprintf(why, sizeof(why), "double charge, %.1f of %.0f", charge, g_Farm.nether_until);
+					else if (charging)
+						snprintf(why, sizeof(why), "double charge, now %.1f", charge);
+					else if (doubled)
+						snprintf(why, sizeof(why), "charge %.1f of %.0f reached", charge, g_Farm.nether_until);
+					line("Next run", charging ? marked : own, why);
+					if (charging && g_Farm.nether_until > 0)
+						line("Then", own, "");
+				}
+				else
+					ImGui::TextDisabled("Load a character to list the warlords.");
+				ImGui::Spacing();
+				ImGui::AlignTextToFramePadding();
+				ImGui::TextDisabled("Warlord");
+				ImGui::SameLine(column);
+				if (ImGui::RadioButton("Best for my slots", g_Farm.nether_best))
+				{
+					g_Farm.nether_best = true;
+					changed = true;
+				}
+				if (ImGui::IsItemHovered())
+				{
+					int wanted = 0, all = 0;
+					if (best >= 0)
+						WantedRewards(best, wanted, all);
+					ImGui::SetTooltip("The warlord with the largest share of rewards in the wanted slots set below:\n2 Glove and 2 Shoulder of 7 beats 3 Glove of 7 when both slots are wanted.\nLooked up again before each run, as the game changes the rewards after each one won.\nWith Primordial ticked only the named warlords are looked at.\nNow: %s, %d of %d wanted", best >= 0 ? WarlordName(best).c_str() : "none found", wanted, all);
+				}
+				ImGui::SameLine();
+				if (ImGui::RadioButton("##named", !g_Farm.nether_best))
+				{
+					g_Farm.nether_best = false;
+					changed = true;
+				}
+				ImGui::SameLine();
+				ImGui::BeginDisabled(g_Farm.nether_best);
 				ImGui::SetNextItemWidth(330 * g_Appearance.scale);
-				std::string chosen_tags = RewardTags(g_Farm.nether_warlord);
-				if (ImGui::BeginCombo("Warlord", count ? (label(g_Farm.nether_warlord) + (chosen_tags.empty() ? "" : "  " + chosen_tags)).c_str() : "load a character to list them"))
+				if (ImGui::BeginCombo("##warlord", count ? label(g_Farm.nether_warlord).c_str() : "load a character to list them"))
 				{
 					// By name.
 					std::vector<std::pair<std::string, int>> listed;
@@ -2267,44 +2519,21 @@ namespace
 					ImGui::EndCombo();
 				}
 				ImGui::EndDisabled();
-				changed |= ImGui::Checkbox("Run the warlord with the largest share of rewards in my wanted slots", &g_Farm.nether_best);
+				changed |= ImGui::Checkbox("Double Nether Charge first", &g_Farm.nether_double);
 				if (ImGui::IsItemHovered())
-					ImGui::SetTooltip("Of all the legendaries a warlord can give, the share that is for the wanted slots set below:\n2 Glove and 2 Shoulder of 7 beats 3 Glove of 7 when both slots are wanted.\nLooked up again before each run, as the game changes the rewards after each one won.\nWith Primordial ticked only the named warlords are looked at.");
-				if (g_Farm.nether_best)
-				{
-					ImGui::SameLine();
-					if (best >= 0)
-					{
-						int wanted = 0, all = 0;
-						WantedRewards(best, wanted, all);
-						ImGui::TextDisabled("%s, %d of %d wanted", WarlordName(best).c_str(), wanted, all);
-						std::string tags = RewardTags(best);
-						if (!tags.empty())
-						{
-							ImGui::SameLine();
-							ImGui::TextColored({ 0.45f, 0.9f, 0.45f, 1.0f }, "%s", tags.c_str());
-						}
-					}
-					else
-						ImGui::TextDisabled("none found");
-				}
-				changed |= ImGui::Checkbox("Run the warlord with double Nether Charge instead", &g_Farm.nether_double);
-				if (ImGui::IsItemHovered())
-					ImGui::SetTooltip("The one the Netherworld's map marks with a banner; it moves to another warlord over time.\nThe warlord chosen above is run when none is marked.");
+					ImGui::SetTooltip("The one the Netherworld's map marks with a banner is run instead; it moves to another warlord over time.\nThe warlord above is run when none is marked.");
 				if (g_Farm.nether_double)
 				{
 					ImGui::SameLine();
-					ImGui::TextDisabled("%s", marked >= 0 ? WarlordName(marked).c_str() : "none marked");
-				}
-				if (g_Farm.nether_double)
-				{
-					ImGui::Indent();
+					ImGui::TextDisabled("until");
+					ImGui::SameLine();
 					ImGui::SetNextItemWidth(70 * g_Appearance.scale);
-					changed |= ImGui::InputFloat("until Nether Charge is at least this, then the warlord above (0 = always)", &g_Farm.nether_until, 0, 0, "%.0f");
+					changed |= ImGui::InputFloat("##until", &g_Farm.nether_until, 0, 0, "%.0f");
 					g_Farm.nether_until = (std::min)((std::max)(g_Farm.nether_until, 0.0f), 100000.0f);
+					if (ImGui::IsItemHovered())
+						ImGui::SetTooltip("Once Nether Charge is at least this, the warlord above is run to spend it.\n0 = always the double charge run.");
 					ImGui::SameLine();
-					ImGui::TextDisabled("now %.1f", ToNumber(Global("nether_charge")));
-					ImGui::Unindent();
+					ImGui::TextDisabled(marked >= 0 ? "(0 = always)" : "(0 = always)  none marked");
 				}
 				changed |= ImGui::Checkbox("Primordial Netherworld", &g_Farm.nether_primordial);
 				// The gear slots in the order wanted: for the pick from the chest and for the choice of warlord.
@@ -2328,7 +2557,7 @@ namespace
 				ImGui::SetNextItemWidth(120 * g_Appearance.scale);
 				changed |= ImGui::SliderInt("How many slots from the top of Slot priority are wanted", &g_Farm.nether_wanted, 1, 10, "%d", ImGuiSliderFlags_AlwaysClamp);
 				if (ImGui::IsItemHovered())
-					ImGui::SetTooltip("Used to choose the warlord whose rewards suit best, and to stop rolling offers again.\nReorder the slots under Slot priority.");
+					ImGui::SetTooltip("Used to choose the warlord whose rewards suit best.\nReorder the slots under Slot priority.");
 				{
 					// The slots that are, by name.
 					std::string wanted;
@@ -2346,23 +2575,26 @@ namespace
 					ImGui::TextDisabled("A Nether item is always taken. Then by Slot priority above, the most wanted first.");
 					changed |= ImGui::Checkbox("Spend slorm to roll offers again", &g_Farm.nether_reroll);
 					if (ImGui::IsItemHovered())
-						ImGui::SetTooltip("The least wanted offer is rolled again, then the next, until what is asked for is on offer.\nThe game rolls each of the three offers again once, and a roll can turn up a Nether item.");
+						ImGui::SetTooltip("Every offer that is not a Nether item is rolled again before the pick, the least wanted first.\nThe game rolls each of the three offers again once, and a roll can turn up a Nether item.");
 					if (g_Farm.nether_reroll)
 					{
 						ImGui::Indent();
-						int until = g_Farm.nether_reroll_nether ? 1 : 0;
-						static const char* const UNTIL[] = { "Until a wanted slot or a Nether item is on offer", "Until a Nether item is on offer" };
-						ImGui::SetNextItemWidth(430 * g_Appearance.scale);
-						if (ImGui::Combo("##rolluntil", &until, UNTIL, 2))
-						{
-							g_Farm.nether_reroll_nether = until == 1;
-							changed = true;
-						}
-						if (g_Farm.nether_reroll_nether)
-							ImGui::TextDisabled("Every offer is rolled, a legendary in a wanted slot too.");
 						ImGui::SetNextItemWidth(120 * g_Appearance.scale);
 						changed |= ImGui::InputFloat("Keep at least this much slorm", &g_Farm.nether_keep, 0, 0, "%.0f");
 						g_Farm.nether_keep = (std::max)(g_Farm.nether_keep, 0.0f);
+						ImGui::Unindent();
+					}
+					changed |= ImGui::Checkbox("Abandon the expedition when no Nether item is on offer", &g_Farm.nether_leave);
+					if (ImGui::IsItemHovered())
+						ImGui::SetTooltip("Nothing is taken, whatever the slots: the hero leaves as with the game's Abandon Expedition,\nafter the rolls if those are ticked. A run that is not won leaves the warlords' rewards as they are.");
+					if (g_Farm.nether_leave)
+					{
+						ImGui::Indent();
+						ImGui::SetNextItemWidth(70 * g_Appearance.scale);
+						changed |= ImGui::InputInt("only if the warlord has at least this many rewards in my wanted slots", &g_Farm.nether_leave_min, 0, 0);
+						g_Farm.nether_leave_min = (std::min)((std::max)(g_Farm.nether_leave_min, 0), 10);
+						if (ImGui::IsItemHovered())
+							ImGui::SetTooltip("The count shown as \"4 of 6 wanted\" for a warlord. With fewer, an offer is taken by the rules\nand the run is won, which gives the warlords new rewards. 0 = always abandon.");
 						ImGui::Unindent();
 					}
 					changed |= ImGui::Checkbox("Slots count for Nether items only", &g_Farm.nether_slots_nether);
@@ -2419,10 +2651,11 @@ namespace
 			else if (Name == "nether_best") { Words >> flag; g_Farm.nether_best = flag != 0; }
 			else if (Name == "nether_until") { Words >> g_Farm.nether_until; g_Farm.nether_until = (std::min)((std::max)(g_Farm.nether_until, 0.0f), 100000.0f); }
 			else if (Name == "nether_pick") { Words >> flag; g_Farm.nether_pick = flag != 0; }
+			else if (Name == "nether_leave") { Words >> flag; g_Farm.nether_leave = flag != 0; }
+			else if (Name == "nether_leave_min") { Words >> g_Farm.nether_leave_min; g_Farm.nether_leave_min = (std::min)((std::max)(g_Farm.nether_leave_min, 0), 10); }
 			else if (Name == "nether_slots_nether") { Words >> flag; g_Farm.nether_slots_nether = flag != 0; }
 			else if (Name == "nether_fallback") { Words >> flag; g_Farm.nether_fallback = flag == 1 ? 1 : 0; }
 			else if (Name == "nether_reroll") { Words >> flag; g_Farm.nether_reroll = flag != 0; }
-			else if (Name == "nether_reroll_nether") { Words >> flag; g_Farm.nether_reroll_nether = flag != 0; }
 			else if (Name == "nether_wanted") { Words >> g_Farm.nether_wanted; g_Farm.nether_wanted = (std::min)((std::max)(g_Farm.nether_wanted, 1), 10); }
 			else if (Name == "nether_keep") { Words >> g_Farm.nether_keep; g_Farm.nether_keep = (std::max)(g_Farm.nether_keep, 0.0f); }
 			else if (Name == "nether_slots")
@@ -2467,10 +2700,11 @@ namespace
 				<< "farmer.nether_best " << (g_Farm.nether_best ? 1 : 0) << '\n'
 				<< "farmer.nether_until " << g_Farm.nether_until << '\n'
 				<< "farmer.nether_pick " << (g_Farm.nether_pick ? 1 : 0) << '\n'
+				<< "farmer.nether_leave " << (g_Farm.nether_leave ? 1 : 0) << '\n'
+				<< "farmer.nether_leave_min " << g_Farm.nether_leave_min << '\n'
 				<< "farmer.nether_slots_nether " << (g_Farm.nether_slots_nether ? 1 : 0) << '\n'
 				<< "farmer.nether_fallback " << g_Farm.nether_fallback << '\n'
 				<< "farmer.nether_reroll " << (g_Farm.nether_reroll ? 1 : 0) << '\n'
-				<< "farmer.nether_reroll_nether " << (g_Farm.nether_reroll_nether ? 1 : 0) << '\n'
 				<< "farmer.nether_wanted " << g_Farm.nether_wanted << '\n'
 				<< "farmer.nether_keep " << std::fixed << std::setprecision(0) << g_Farm.nether_keep << std::defaultfloat << std::setprecision(6) << '\n'
 				<< "farmer.nether_slots " << g_Farm.nether_slots[0] << ' ' << g_Farm.nether_slots[1] << ' ' << g_Farm.nether_slots[2] << ' ' << g_Farm.nether_slots[3] << ' ' << g_Farm.nether_slots[4] << ' '
