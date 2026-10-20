@@ -23,8 +23,7 @@ INSTALL
 USE
   Open the Slormitizer at Rick Manalan and click the slormite left of
   its item slot: the options take the place of the character page, and
-  the inventory beside them stays in use. The same settings are in
-  Options > Mods.
+  the inventory beside them stays in use.
 
   Plan        The Slormandrites of Fate, Aptitude, Virtue and Harmony
               to load from your stock: the load that makes reaching
@@ -52,7 +51,7 @@ USE
 UNINSTALL
   Delete mods\Aurie\SlormReslormitizer.dll and
   SlormReslormitizer-README.txt from the game folder; SlormAPI keeps
-  your settings in mods\Aurie\SlormAPI\settings\SlormReslormitizer.json.
+  your settings in mods\Aurie\SlormAPI\data\SlormReslormitizer.json.
   The game's own files are never changed.
 
 FILES IN THIS ZIP
@@ -60,4 +59,4 @@ FILES IN THIS ZIP
   mods\licenses\                      license and source of the above
 
 Created while playing: aurie.log, and through SlormAPI
-mods\Aurie\SlormAPI\settings\SlormReslormitizer.json (your settings).
+mods\Aurie\SlormAPI\data\SlormReslormitizer.json (your settings).

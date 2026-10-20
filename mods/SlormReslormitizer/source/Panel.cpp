@@ -1,5 +1,5 @@
-// The panel beside Rick Manalan's Slormitizer, drawn each frame with the game's own sprites and fonts,
-// and the same settings in Options > Mods through SlormAPI.
+// The panel beside Rick Manalan's Slormitizer, drawn each frame with the game's own sprites and fonts;
+// its settings are kept in SlormAPI's data file for the mod.
 #include "Reslormitizer.hpp"
 #include "Version.hpp"
 #include <algorithm>
@@ -85,7 +85,7 @@ struct Hit
 static std::vector<Hit> g_Hits;
 static std::string g_Help;
 
-// A setting kept by SlormAPI, as Options > Mods and the panel's selectors show it.
+// A number setting, as the panel's selector shows it.
 struct Number
 {
 	const char* key;
@@ -176,69 +176,34 @@ static void ApplySetting(const std::string& Key, const sj::Json& Value)
 	else if (Key == "merge_up") g_Settings.merge_up = Value.b;
 }
 
-static void Store(const char* Key, sj::Json Value)
+// The settings live in SlormAPI's data file for the mod; the panel is the only place they are changed.
+static void SaveSettings()
 {
-	sj::Json command = Command("set_setting");
-	command.Add("mod", MOD_NAME);
-	command.Add("key", Key);
-	command.Add("value", std::move(Value));
-	if (std::optional<sj::Json> stored = Request(command))
-		ApplySetting(Key, *stored);
-}
-
-static sj::Json Setting(const char* Key, const char* Label, const char* Help, const char* Type, sj::Json Default)
-{
-	sj::Json setting = sj::Json::Object();
-	setting.Add("key", Key);
-	setting.Add("label", Label);
-	setting.Add("help", Help);
-	setting.Add("type", Type);
-	setting.Add("default", std::move(Default));
-	return setting;
-}
-
-static void RegisterSettings()
-{
-	Settings defaults;
-	sj::Json settings = sj::Json::Array();
+	sj::Json values = sj::Json::Object();
 	for (const Number& number : NUMBERS)
-	{
-		sj::Json setting = Setting(number.key, number.label, number.help, "number", defaults.*number.field);
-		setting.Add("min", number.min);
-		setting.Add("max", number.max);
-		setting.Add("step", number.step);
-		settings.Push(std::move(setting));
-	}
-	sj::Json slormite = Setting("slormite", "Slormite", SLORMITE_HELP, "choice", WHICHEVER);
-	sj::Json tiers = sj::Json::Array();
-	for (int tier = 0; tier <= SLORMITE_TIERS; tier++)
-		tiers.Push(SlormiteChoice(tier));
-	slormite.Add("options", std::move(tiers));
-	settings.Push(std::move(slormite));
-	settings.Push(Setting("reload", "Load more slormites", RELOAD_HELP, "bool", defaults.reload));
-	settings.Push(Setting("merge_up", "Merge up when none are left", MERGE_UP_HELP, "bool", defaults.merge_up));
+		values.Add(number.key, g_Settings.*number.field);
+	values.Add("slormite", SlormiteChoice(g_Settings.slormite));
+	values.Add("reload", g_Settings.reload);
+	values.Add("merge_up", g_Settings.merge_up);
+	sj::Json command = Command("mod_data");
+	command.Add("mod", MOD_NAME);
+	command.Add("value", std::move(values));
+	Request(command);
+}
 
-	sj::Json registration = Command("register_settings");
-	registration.Add("mod", MOD_NAME);
-	registration.Add("settings", std::move(settings));
-	if (std::optional<sj::Json> values = Request(registration))
+static void LoadSettings()
+{
+	sj::Json command = Command("mod_data");
+	command.Add("mod", MOD_NAME);
+	if (std::optional<sj::Json> values = Request(command); values && values->type == sj::Json::Obj)
 		for (const auto& [key, value] : values->o)
 			ApplySetting(key, value);
 }
 
-static void OnSetting(const char* Event, const char* DataJson, void* User)
+static void Store(const char* Key, sj::Json Value)
 {
-	try
-	{
-		sj::Json data = sj::Parse(DataJson ? DataJson : "");
-		const sj::Json* value = data.Find("value");
-		if (data.GetStr("mod") == MOD_NAME && value)
-			ApplySetting(data.GetStr("key"), *value);
-	}
-	catch (const std::exception& error)
-	{
-		Log("%s event: %s", Event, error.what());
-	}
+	ApplySetting(Key, Value);
+	SaveSettings();
 }
 
 template <int Which>
@@ -340,8 +305,7 @@ bool PanelStart()
 	registration.Add("game", "1.0.2c");
 	Request(registration);
 
-	RegisterSettings();
-	g_Api->Subscribe("setting_changed", OnSetting, nullptr);
+	LoadSettings();
 	HookSurfaceDraws(std::make_integer_sequence<int, SURFACE_DRAW_COUNT>());
 	HookMouseChecks(std::make_integer_sequence<int, MOUSE_CHECK_COUNT>());
 	return true;
