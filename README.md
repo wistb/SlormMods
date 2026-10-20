@@ -9,7 +9,7 @@ Mods for [The Slormancer](https://store.steampowered.com/app/1104280/The_Slorman
 | [SlormHUD](mods/SlormHUD) | Follow a slorm-planner build inside the game. | [page](https://www.nexusmods.com/theslormancer/mods/3) |
 | [SlormReslormitizer](mods/SlormReslormitizer) | Operates Rick Manalan's Slormitizer: the Slormandrites that reach a level cheapest. | [page](https://www.nexusmods.com/theslormancer/mods/16) |
 | [NoSlipperyIce](mods/NoSlipperyIce) | Removes the Slippery Ice cataclysm. | [page](https://www.nexusmods.com/theslormancer/mods/6) |
-| [MapReveal](mods/MapReveal) | Shows the whole map and its icons from the start of a floor. | |
+| [MapReveal](mods/MapReveal) | Shows the whole map and its icons from the start of a floor. | [page](https://www.nexusmods.com/theslormancer/mods/17) |
 
 ## Build
 

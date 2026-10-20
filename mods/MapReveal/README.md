@@ -1,6 +1,6 @@
 # Map Reveal
 
-Shows the whole map from the start of a floor in [The Slormancer](https://store.steampowered.com/app/1104280/The_Slormancer/).
+Shows the whole map from the start of a floor in [The Slormancer](https://store.steampowered.com/app/1104280/The_Slormancer/). On [Nexus Mods](https://www.nexusmods.com/theslormancer/mods/17).
 
 The minimap and the large map show every corridor and icon as soon as a floor begins, instead of what the hero has walked past. There is nothing to set up. With SlormAPI installed, the mod is listed on the game's MODS page and has a switch under Options > Mods; switching it off takes the icons away at once, and the map clears again on the next floor.
 
@@ -8,7 +8,7 @@ The minimap and the large map show every corridor and icon as soon as a floor be
 
 1. Back up your save: `%LocalAppData%\The_Slormancer`
 2. If the game does not load Aurie mods yet, install the Aurie loader. The easiest way is the installer from [SlormAPI](https://github.com/tsotsas/SlormAPI/releases).
-3. Download the latest `MapReveal` zip from [Releases](https://github.com/wistb/SlormMods/releases).
+3. Download the latest `MapReveal` zip from [Releases](https://github.com/wistb/SlormMods/releases) or [Nexus Mods](https://www.nexusmods.com/theslormancer/mods/17).
 4. Extract it into the game folder, so `MapReveal.dll` lands in `mods\Aurie`.
 5. Start the game from Steam as usual.
 
