@@ -2,13 +2,13 @@
 
 Mods for [The Slormancer](https://store.steampowered.com/app/1104280/The_Slormancer/). Each has its own folder, readme and releases.
 
-| Mod | What it does |
-|---|---|
-| [SlormSuite](mods/SlormSuite) | A collection of smaller mods behind one overlay. |
-| [SlormReforger](mods/SlormReforger) | Automatic reforging at Friedrich's blacksmith. |
-| [SlormHUD](mods/SlormHUD) | Follow a slorm-planner build inside the game. |
-| [SlormReslormitizer](mods/SlormReslormitizer) | Operates Rick Manalan's Slormitizer for the odds you ask for. |
-| [NoSlipperyIce](mods/NoSlipperyIce) | Removes the Slippery Ice cataclysm. |
+| Mod | What it does | Nexus |
+|---|---|---|
+| [SlormSuite](mods/SlormSuite) | A collection of smaller mods behind one overlay. | |
+| [SlormReforger](mods/SlormReforger) | Automatic reforging at Friedrich's blacksmith. | [page](https://www.nexusmods.com/theslormancer/mods/2) |
+| [SlormHUD](mods/SlormHUD) | Follow a slorm-planner build inside the game. | [page](https://www.nexusmods.com/theslormancer/mods/3) |
+| [SlormReslormitizer](mods/SlormReslormitizer) | Operates Rick Manalan's Slormitizer for the odds you ask for. | |
+| [NoSlipperyIce](mods/NoSlipperyIce) | Removes the Slippery Ice cataclysm. | [page](https://www.nexusmods.com/theslormancer/mods/6) |
 
 ## Build
 
