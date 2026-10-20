@@ -1,8 +1,11 @@
 #include "Reslormitizer.hpp"
+#include "Optimizer.hpp"
 #include "Version.hpp"
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstdarg>
+#include <future>
 #include <sstream>
 using namespace Aurie;
 using namespace YYTK;
@@ -36,16 +39,21 @@ constexpr int MERGE_BATCH = 100;
 struct Effects
 {
 	bool known = false;
-	double fate_chance = 1, fate_critical = 1, fate_twice = 1, fate_failure = 1;
+	double fate_chance = 1, fate_critical = 1, fate_critical_potential = 1, fate_twice = 1, fate_failure = 1;
 	double virtue_twice = 5, virtue_failure = 3;
-	double aptitude_critical = 5;
+	double aptitude_critical = 5, aptitude_critical_potential = 5;
 	double harmony_failure = 1;
 	// Slormites of one tier that merge into one of the next.
 	int merge_number = 3;
 	// Failure for each level a slormite is short of the item, and the tier that is never short by more than one.
 	double underlevel = 50;
 	int max_tier = 15;
+	// Chance, critical and double for each tier a slormite is over the next level.
+	double over_chance = 25, over_critical = 0, over_twice = 0;
+	// Goldus charged per goldus of purchase price loaded.
+	double apply = 1;
 	double price[MATERIAL_COUNT] = {};
+	double slormite_price[SLORMITE_TIERS + 1] = {};
 };
 static Effects g_Effects;
 
@@ -63,7 +71,6 @@ static Mode g_Mode = ONCE;
 // Steps a load has been waiting for the game to show what was moved.
 static int g_LoadTries = 0;
 // The Harmony count was set by trying it against the game's numbers, past what the plan said.
-static bool g_Trimmed = false;
 // The slormite tier a run keeps in the machine, and steps spent waiting for the game to show one.
 static int g_RunTier = 0;
 static int g_SlormiteTries = 0;
@@ -205,6 +212,13 @@ static void ReadEffects(CInstance* Self)
 	e.virtue_twice = virtue[0], e.virtue_failure = virtue[1];
 	e.aptitude_critical = aptitude[0];
 	e.harmony_failure = harmony[0];
+	if (fate.size() > 2) e.fate_critical_potential = fate[2];
+	if (aptitude.size() > 1) e.aptitude_critical_potential = aptitude[1];
+	std::vector<double> over = Numbers(find("Craft Slormite Overlevel"));
+	if (over.size() >= 3) e.over_chance = over[0], e.over_critical = over[1], e.over_twice = over[2];
+	if (double apply = ToNumber(find("Slormite Apply Multiplier")); apply > 0) e.apply = apply;
+	for (int tier = 1; tier <= SLORMITE_TIERS; tier++)
+		e.slormite_price[tier] = ToNumber(find("Slormite Purchase Price " + std::to_string(tier)));
 	if (double under = ToNumber(find("Craft Slormite Underlevel")); under > 0) e.underlevel = under;
 	if (double number = ToNumber(find("Slormite Merge Number")); number >= 2) e.merge_number = static_cast<int>(number);
 	if (double tier = ToNumber(find("Slormite Max Tier")); tier > 0) e.max_tier = static_cast<int>(tier);
@@ -350,6 +364,101 @@ static void Read(CInstance* Self)
 
 // The cheapest counts that reach the targets. Fate moves all three, so every count of it is tried
 // with the least of the others that still gets there.
+// The game's ids of the optimizer's kinds, in its order.
+static const int OPT_ID[opt::KINDS] = { FATE, APTITUDE, VIRTUE, HARMONY };
+
+// The planner's slow solves run on a worker, which has the planner to itself until its future is taken.
+static opt::Planner g_Planner;
+static std::future<void> g_Solving;
+
+static Plan Planning()
+{
+	Plan plan;
+	plan.planning = true;
+	plan.why = "planning...";
+	return plan;
+}
+
+// The load with the least expected cost until the item reaches the level asked for, within the floors. A solve
+// takes up to a few hundred milliseconds, so one only runs when what the planner is given changes.
+static Plan OptimalPlan(int Kept)
+{
+	const Machine& m = g_Machine;
+	const Effects& e = g_Effects;
+	opt::Model o;
+	o.level = m.level, o.target = (std::max)(g_Settings.until_level, m.level + 1), o.potential = m.potential;
+	o.tier = m.tier, o.max_tier = e.max_tier;
+	o.over_chance = e.over_chance, o.over_critical = e.over_critical, o.over_twice = e.over_twice, o.under_failure = e.underlevel;
+	// The base odds less what the slormite's level adds at this level: the optimizer adds that back per level.
+	int over = (std::max)(0, m.tier - 1 - m.level);
+	int under = m.level <= m.tier - 1 ? 0 : m.tier >= e.max_tier ? 1 : m.level - (m.tier - 1);
+	o.base_chance = m.raw_chance - m.potential - e.over_chance * over;
+	o.base_critical = m.base.critical - e.over_critical * over;
+	o.base_critical_potential = m.base.critical_potential;
+	o.base_twice = m.base.twice - e.over_twice * over;
+	o.base_failure = m.base.failure - e.underlevel * under;
+	o.base_cost = m.base.cost;
+	o.apply = e.apply;
+	o.slormite_price = m.tier >= 1 && m.tier <= SLORMITE_TIERS ? e.slormite_price[m.tier] : 0;
+	o.unit[opt::FATE] = { e.fate_chance, e.fate_critical, e.fate_critical_potential, e.fate_twice, e.fate_failure, e.price[FATE] };
+	o.unit[opt::APTITUDE] = { 0, e.aptitude_critical, e.aptitude_critical_potential, 0, 0, e.price[APTITUDE] };
+	o.unit[opt::VIRTUE] = { 0, 0, 0, e.virtue_twice, e.virtue_failure, e.price[VIRTUE] };
+	o.unit[opt::HARMONY] = { 0, 0, 0, 0, -e.harmony_failure, e.price[HARMONY] };
+	for (int k = 0; k < opt::KINDS; k++)
+	{
+		// What is loaded already came out of the stack.
+		o.stock[k] = m.stock[OPT_ID[k]];
+		for (const Loaded& loaded : m.loaded)
+			if (loaded.id == OPT_ID[k]) o.stock[k] += loaded.count;
+	}
+	o.free_slots = MODIFIER_KINDS - Kept;
+	o.min_chance = std::clamp(g_Settings.chance, 0, 100);
+	o.min_critical = std::clamp(g_Settings.critical, 0, 100);
+	o.min_twice = std::clamp(g_Settings.twice, 0, 100);
+	o.max_failure = std::clamp(g_Settings.failure, 0, 100);
+
+	static bool ran = false;
+	static opt::Model last;
+	static opt::Result result;
+	if (!ran || !(o == last))
+	{
+		if (g_Solving.valid())
+		{
+			if (g_Solving.wait_for(std::chrono::seconds(0)) != std::future_status::ready) return Planning();
+			g_Solving.get();
+		}
+		// A run moves only the level, the potential and the stock, which the planner looks up without a solve.
+		if (!g_Planner.Ready(o))
+		{
+			g_Solving = std::async(std::launch::async, [o] { g_Planner.Prepare(o); });
+			return Planning();
+		}
+		result = g_Planner.Plan(o);
+		last = o, ran = true;
+		if (result.possible)
+			Log("optimal: Fate %d, Aptitude %d, Virtue %d, Harmony %d; %.0f goldus over %.1f activations expected",
+				result.load.count[opt::FATE], result.load.count[opt::APTITUDE], result.load.count[opt::VIRTUE],
+				result.load.count[opt::HARMONY], result.expected_cost, result.expected_activations);
+	}
+	Plan plan;
+	plan.possible = result.possible;
+	plan.why = result.why;
+	for (int k = 0; k < opt::KINDS; k++)
+	{
+		plan.count[OPT_ID[k]] = result.load.count[k];
+		plan.value += result.load.count[k] * e.price[OPT_ID[k]];
+	}
+	plan.odds.chance = result.odds.chance;
+	plan.odds.critical = result.odds.critical;
+	plan.odds.critical_potential = result.odds.critical_potential;
+	plan.odds.twice = result.odds.twice;
+	plan.odds.failure = result.odds.failure;
+	plan.odds.cost = result.odds.cost;
+	plan.expected_cost = result.expected_cost;
+	plan.expected_activations = result.expected_activations;
+	return plan;
+}
+
 static void MakePlan()
 {
 	const Machine& m = g_Machine;
@@ -368,67 +477,8 @@ static void MakePlan()
 	int kept = 0;
 	for (const Loaded& loaded : m.loaded)
 		if (!Planned(loaded.id)) kept++;
-	double need_critical = std::clamp(g_Settings.critical, 0, 100) - m.base.critical;
-	double need_twice = std::clamp(g_Settings.twice, 0, 100) - m.base.twice;
-	double target_failure = std::clamp(g_Settings.failure, 0, 100);
-	double target_chance = std::clamp(g_Settings.chance, 0, 100);
-	auto units = [](double Need, double Each) { return Need <= 0 || Each <= 0 ? 0 : static_cast<int>(ceil(Need / Each - 1e-9)); };
-
-	int most_fate = (std::max)({ units(need_critical, e.fate_critical), units(need_twice, e.fate_twice), units(100 - m.raw_chance, e.fate_chance) });
-	bool short_stock = false, short_slots = false;
-	double best = -1;
-	for (int fate = 0; fate <= most_fate; fate++)
-	{
-		// Failure takes its share off the chance, so a chance target may ask for less failure than its own.
-		double raw = (std::min)(m.raw_chance + fate * e.fate_chance, 100.0);
-		if (raw < target_chance - 1e-9)
-			continue;
-		double failure = target_chance > 0 ? (std::min)(target_failure, 100 * (1 - target_chance / raw)) : target_failure;
-
-		int count[MATERIAL_COUNT] = {};
-		count[FATE] = fate;
-		count[APTITUDE] = units(need_critical - fate * e.fate_critical, e.aptitude_critical);
-		count[VIRTUE] = units(need_twice - fate * e.fate_twice, e.virtue_twice);
-		count[HARMONY] = units(m.base.failure + fate * e.fate_failure + count[VIRTUE] * e.virtue_failure - failure, e.harmony_failure);
-
-		int kinds = kept;
-		double value = 0;
-		bool in_stock = true;
-		for (int id = FATE; id < MATERIAL_COUNT; id++)
-		{
-			if (!count[id])
-				continue;
-			kinds++;
-			value += count[id] * e.price[id];
-			// What is loaded already came out of the stack.
-			double have = m.stock[id];
-			for (const Loaded& loaded : m.loaded)
-				if (loaded.id == id) have += loaded.count;
-			if (count[id] > have) in_stock = false;
-		}
-		if (kinds > MODIFIER_KINDS) { short_slots = true; continue; }
-		if (!in_stock) { short_stock = true; continue; }
-		if (best >= 0 && value >= best)
-			continue;
-		best = value;
-		plan.possible = true;
-		std::copy(std::begin(count), std::end(count), std::begin(plan.count));
-		plan.value = value;
-	}
-	if (!plan.possible)
-		plan.why = short_stock ? "not enough Slormandrites in stock" : short_slots ? "the targets need more kinds than the Slormitizer has slots" : "no way to reach the targets";
-	else
-	{
-		plan.odds = m.base;
-		plan.odds.critical += plan.count[FATE] * e.fate_critical + plan.count[APTITUDE] * e.aptitude_critical;
-		plan.odds.twice += plan.count[FATE] * e.fate_twice + plan.count[VIRTUE] * e.virtue_twice;
-		plan.odds.failure += plan.count[FATE] * e.fate_failure + plan.count[VIRTUE] * e.virtue_failure - plan.count[HARMONY] * e.harmony_failure;
-		plan.odds.chance = (std::min)(m.raw_chance + plan.count[FATE] * e.fate_chance, 100.0) * (1 - std::clamp(plan.odds.failure, 0.0, 100.0) / 100);
-	}
-	g_Plan = plan;
+	g_Plan = OptimalPlan(kept);
 }
-
-static bool Meets(const Odds& Odds);
 
 bool CanStart()
 {
@@ -452,7 +502,11 @@ bool PlanLoaded()
 
 bool TargetsMet()
 {
-	return Meets(g_Machine.shown);
+	// The game shows what the plan foresaw, give or take a rounding.
+	const Odds& s = g_Machine.shown;
+	const Odds& p = g_Plan.odds;
+	auto close = [](double A, double B) { return std::fabs(std::clamp(A, 0.0, 100.0) - std::clamp(B, 0.0, 100.0)) <= 1.0; };
+	return g_Plan.possible && close(s.chance, p.chance) && close(s.critical, p.critical) && close(s.twice, p.twice) && close(s.failure, p.failure);
 }
 
 // The modifier slot holding a material, read fresh; -1 when none does.
@@ -541,55 +595,6 @@ static LoadResult LoadPlan(CInstance* Self, std::string& Why)
 	return PENDING;
 }
 
-static bool Meets(const Odds& Odds)
-{
-	return Odds.critical >= (std::min)(g_Settings.critical, 100) - 1e-6 && Odds.twice >= (std::min)(g_Settings.twice, 100) - 1e-6
-		&& Odds.failure <= (std::max)(g_Settings.failure, 0) + 1e-6 && Odds.chance >= (std::min)(g_Settings.chance, 100) - 1e-6;
-}
-
-// When the plan's numbers were off: the least Harmony the game itself says is enough, by trying
-// counts in the slot. False when no amount in stock does it.
-static LoadResult TrimHarmony(CInstance* Self, std::string& Why)
-{
-	RValue header, stack;
-	int slot = LoadedSlot(HARMONY, header);
-	if (slot < 0)
-	{
-		if (g_StackSlot[HARMONY] < 0) { Why = "no Harmony in stock"; return FAILED; }
-		if (g_LoadTries++ == 0)
-			CallScript(g_Move, Self, { RValue(static_cast<double>(g_StackSlot[HARMONY])), RValue(-1.0) });
-		if (g_LoadTries > 30) { Why = "the game did not take the Harmony"; return FAILED; }
-		return PENDING;
-	}
-	RValue old = At(header, 4);
-	int stack_slot = g_StackSlot[HARMONY];
-	double most = ToNumber(old) + (stack_slot >= 0 && IsStack(At(g_Hero, stack_slot), 0, stack) && static_cast<int>(ToNumber(At(stack, 2))) == HARMONY ? ToNumber(At(stack, 4)) : 0);
-	auto meets = [&](double Count)
-	{
-		Put(header, 4, Like(old, Count));
-		return Meets(Preview(Self));
-	};
-	int low = 0, high = static_cast<int>(most);
-	if (!meets(high))
-	{
-		Odds odds = Preview(Self);
-		Put(header, 4, old);
-		char text[160];
-		snprintf(text, sizeof(text), "even %d Harmony leaves chance %.0f%%, failure %.0f%%: this slormite is too low for the item", high, odds.chance, odds.failure);
-		Why = text;
-		return FAILED;
-	}
-	while (low < high)
-	{
-		int middle = (low + high) / 2;
-		if (meets(middle)) high = middle;
-		else low = middle + 1;
-	}
-	Put(header, 4, old);
-	Log("trim: Harmony %d by the game's numbers", high);
-	g_LoadTries = 1;
-	return LoadMaterial(Self, HARMONY, (std::max)(high, 1), Why);
-}
 
 // Makes up to this many slormites of a tier by merging the tiers under it, lowest first, as Rick's
 // Merge Slormites tab does. Returns how many the plan made; 0 when the lower tiers do not hold enough.
@@ -673,6 +678,8 @@ static void Run(CInstance* Self)
 	const Machine& m = g_Machine;
 	if (!m.open) { Stop("the Slormitizer was closed"); return; }
 	if (g_Wait > 0) { g_Wait--; return; }
+	// The optimizer is still at work; the step waits for its plan.
+	if (g_Plan.planning) return;
 
 	switch (g_Step)
 	{
@@ -712,27 +719,18 @@ static void Run(CInstance* Self)
 		if (result == PENDING)
 			return;
 		g_Step = CHECK;
-		g_Trimmed = false;
 		g_LoadTries = 0;
 		g_Wait = 1;
 		return;
 	}
 	case CHECK:
 	{
-		if (!g_Trimmed && !PlanLoaded()) { Stop("the Slormitizer does not hold what was loaded"); return; }
-		if (!TargetsMet() && !g_Trimmed)
-		{
-			std::string why;
-			LoadResult result = TrimHarmony(Self, why);
-			if (result == FAILED) { Stop(why.c_str()); return; }
-			if (result == LOADED) { g_Trimmed = true; g_Wait = 2; }
-			return;
-		}
+		if (!PlanLoaded()) { Stop("the Slormitizer does not hold what was loaded"); return; }
 		if (g_Mode == ONLY_LOAD) { Stop(TargetsMet() ? "loaded" : "loaded, but the game's numbers miss the targets"); return; }
 		if (!TargetsMet())
 		{
 			Note("game shows chance %.0f, critical %.0f, double %.0f, failure %.0f", m.shown.chance, m.shown.critical, m.shown.twice, m.shown.failure);
-			Stop("the game's numbers miss the targets; nothing was spent");
+			Stop("the game's numbers differ from the plan; nothing was spent");
 			return;
 		}
 		if (m.gold < m.shown.cost) { Stop("not enough goldus"); return; }

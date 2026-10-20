@@ -76,19 +76,25 @@ struct Machine
 struct Plan
 {
 	bool possible = false;
+	// The optimizer is still at work on another thread; why says so, and the run waits for it.
+	bool planning = false;
 	std::string why;
 	int count[MATERIAL_COUNT] = {};
 	Odds odds;
 	// Goldus the Slormandrites would cost to buy.
 	double value = 0;
+	// With the optimal load: goldus, materials and slormites at purchase price, until the level is reached.
+	double expected_cost = 0;
+	double expected_activations = 0;
 };
 
 struct Settings
 {
-	int chance = 100;
-	int critical = 100;
-	int twice = 100;
-	int failure = 0;
+	// Floors every activation must respect; none by default.
+	int chance = 0;
+	int critical = 0;
+	int twice = 0;
+	int failure = 100;
 	// Repeating stops at this reinforce level.
 	int until_level = 15;
 	// The slormite tier to use; 0 for whichever is in the machine.
@@ -113,8 +119,9 @@ extern std::deque<std::string> g_Notes;
 bool PlanLoaded();
 // There is enough in the machine, or chosen, to start.
 bool CanStart();
-// What is shown meets the targets.
+// What the game shows is what the plan foresaw.
 bool TargetsMet();
+
 sj::Json Command(const char* Name);
 // The request's result; nothing when SlormAPI is missing or refuses it (logged).
 std::optional<sj::Json> Request(const sj::Json& Command);

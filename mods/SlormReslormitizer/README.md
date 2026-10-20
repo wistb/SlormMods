@@ -1,17 +1,17 @@
 # SlormReslormitizer
 
-Operates Rick Manalan's Slormitizer in [The Slormancer](https://store.steampowered.com/app/1104280/The_Slormancer/): loads the cheapest Slormandrites for the odds you ask for, and reinforces.
+Operates Rick Manalan's Slormitizer in [The Slormancer](https://store.steampowered.com/app/1104280/The_Slormancer/): loads the Slormandrites that make reaching a reinforce level cheapest, and reinforces.
 
 Open the Slormitizer and click the slormite left of its item slot: the options take the place of the character page, and the inventory beside them stays in use. The same settings are in Options > Mods.
 
-- **Targets.** The chance of success, Critical Reinforce and Double Reinforce to reach at least, and the Failure to stay under.
-- **Plan.** The cheapest mix of Slormandrites of Fate, Aptitude, Virtue and Harmony in your stock that reaches the targets, for the item and slormite in the Slormitizer. Slormelines, Negation and True Potential you load yourself are left in place.
+- **Plan.** The Slormandrites of Fate, Aptitude, Virtue and Harmony to load from your stock: the load that makes reaching the level you set the cheapest on average, counting goldus, the Slormandrites and the slormites at their purchase price. It knows that a success spends the item's potential, that a Critical Reinforce refills it, that a failure zeroes it, and that a Double Reinforce skips a level, so it may take a risk now to save on the goes after it. Slormelines, Negation and True Potential you load yourself are left in place.
+- **Floors.** The chance of success, Critical Reinforce and Double Reinforce every activation must reach at least, and the Failure it must stay under. None by default; set them when a risk is not worth any saving, and the plan is the cheapest way within them.
 - **Slormite.** Use whichever slormite is in the Slormitizer, or choose one. More are loaded when it runs out, and lower slormites can be merged up into the one in use, as on Rick's Merge Slormites tab.
 - **Load.** Puts the plan in the Slormitizer. Nothing is spent.
 - **Reinforce once.** Loads the plan and activates the Slormitizer.
-- **Repeat.** Keeps reinforcing until the item reaches the level you set, or the targets can no longer be met.
+- **Repeat.** Keeps reinforcing until the item reaches the level you set, or the stock can no longer get there.
 
-Nothing is activated unless the numbers the game itself shows meet your targets.
+Nothing is activated unless the numbers the game itself shows are the ones the plan foresaw.
 
 ## Install
 
