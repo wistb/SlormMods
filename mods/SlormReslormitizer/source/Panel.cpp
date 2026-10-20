@@ -689,6 +689,8 @@ static void DrawPanel()
 		}
 		y += 4;
 		Text(LEFT, y + LINE - 2, Format("Fee as loaded now: %.0f goldus", m.shown.cost), "ft_standard_11", "grey");
+		if (g_Plan.expected_activations > 0)
+			Text(LEFT, y + LINE * 2 - 4, Format("Expected to the level: %.1f activations, %.0f goldus", g_Plan.expected_activations, g_Plan.expected_cost), "ft_standard_11", "grey");
 	}
 	else
 		Paragraph(LEFT, y, g_Plan.why, RIGHT - LEFT, "ft_standard_12", "grey");
