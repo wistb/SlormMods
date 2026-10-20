@@ -31,7 +31,7 @@ It works through the game's own reforge recipes and pays their normal costs. It 
 Requires The Slormancer on Steam (Windows, 64-bit) and the [Microsoft Visual C++ 2015-2022 Redistributable (x64)](https://aka.ms/vs/17/release/vc_redist.x64.exe).
 
 1. Back up your save folder: `%LocalAppData%\The_Slormancer`
-2. If the game does not load Aurie mods yet, install the Aurie loader. The easiest way is the installer from [SlormAPI](https://github.com/tsotsas/SlormAPI/releases).
+2. Install [SlormAPI](https://github.com/tsotsas/SlormAPI/releases) 1.0.0 or later with its installer, if you have not yet. It sets up the Aurie loader, and SlormReforger needs it.
 3. Download the latest `SlormReforger` zip from [Releases](https://github.com/wistb/SlormMods/releases) or [Nexus Mods](https://www.nexusmods.com/theslormancer/mods/2).
 4. Open the game folder. In Steam: right-click the game, Manage, Browse local files.
 5. Extract the zip there, so `SlormReforger.dll` lands in `mods\Aurie`.
@@ -48,7 +48,7 @@ To uninstall, delete `mods\Aurie\SlormReforger.dll` and `SlormReforger-README.tx
 3. Under Runs, set the step limit and how much of each material to keep.
 4. Press Start. Press Stop, or close the panel, to end a run early.
 
-F6 hides and shows the window, and opens it away from the blacksmith, where the Presets and Options tabs still work. The key can be changed on the Options tab.
+F6 hides and shows the window, and opens it away from the blacksmith, where the Presets and Options tabs still work. The key can be changed on the Options tab, and the window can also be switched off under Options > Mods in the game.
 
 ![The Options tab](nexus/sample3.png)
 
@@ -62,7 +62,7 @@ Each target shows where it stands: green when met, yellow while there is work to
 
 The Slormancer is a GameMaker game. The mod is a plugin for [YYToolkit](https://github.com/AurieFramework/YYToolkit), which runs on the [Aurie Framework](https://github.com/AurieFramework/Aurie) and gives native code access to the game's scripts. SlormReforger reads the item in the reforge slot, asks the game which stats each tier can roll, and calls the game's own apply script for each reroll, lock and unlock. The window is drawn with [Dear ImGui](https://github.com/ocornut/imgui).
 
-The frameworks are not part of the mod; [SlormAPI](https://github.com/tsotsas/SlormAPI)'s installer sets them up.
+Targets, presets and options are kept by [SlormAPI](https://github.com/tsotsas/SlormAPI), which also lists the mod on the game's MODS page. The frameworks are not part of the mod; SlormAPI's installer sets them up.
 
 ## Building
 

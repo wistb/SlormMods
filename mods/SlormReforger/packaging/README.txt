@@ -3,8 +3,9 @@ Automatic reforging at Friedrich's blacksmith in The Slormancer.
 
 REQUIREMENTS
   The Slormancer on Steam (Windows, 64-bit)
-  The Aurie mod loader, installed first. The easiest way is SlormAPI's
-  installer: https://github.com/tsotsas/SlormAPI/releases
+  SlormAPI 1.0.0 or later, installed first with its installer, which
+  also sets up the Aurie mod loader:
+  https://github.com/tsotsas/SlormAPI/releases
   Microsoft Visual C++ 2015-2022 Redistributable (x64). Most PCs already
   have it. If the mod does not load, install it from
   https://aka.ms/vs/17/release/vc_redist.x64.exe
@@ -20,16 +21,20 @@ INSTALL
 USE
   Talk to Friedrich, open Reforge Equipment and put an item in the slot.
   The SlormReforger window appears. F6 hides and shows it; the key can be
-  changed on the Options tab.
+  changed on the Options tab, and the window can also be switched off
+  under Options > Mods in the game.
 
 UNINSTALL
   Delete mods\Aurie\SlormReforger.dll and SlormReforger-README.txt from the
-  game folder; your settings are the other SlormReforger files in
-  mods\Aurie. The game's own files are never changed.
+  game folder. Your targets, presets and options are in
+  mods\Aurie\SlormAPI\data\SlormReforger.json and
+  mods\Aurie\SlormAPI\settings\SlormReforger.json. The game's own files
+  are never changed.
 
 FILES IN THIS ZIP
   mods\Aurie\SlormReforger.dll        the mod
   mods\licenses\                      license and source of the above
 
-Created while playing: aurie.log, and in mods\Aurie the files
-SlormReforger.txt (your settings) and SlormReforger.layout.ini.
+Settings from before 1.3.0 (SlormReforger.txt and
+SlormReforger.layout.ini in mods\Aurie) are taken over the first time;
+you can delete those files afterwards.

@@ -1,9 +1,13 @@
 #include "Reforger.hpp"
 #include "Version.hpp"
+#include <SlormAPI/SlormAPI_Interface.hpp>
+#include <SlormAPI/Json.hpp>
 #include <algorithm>
 #include <cmath>
 #include <cstdarg>
 #include <fstream>
+#include <iterator>
+#include <optional>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -11,6 +15,10 @@ using namespace Aurie;
 using namespace YYTK;
 
 static YYTKInterface* g_Yytk = nullptr;
+// As shown on SlormAPI's MODS page, and the name of its settings and data file.
+constexpr const char* MOD_NAME = "SlormReforger";
+static SlormAPIInterface* g_Api = nullptr;
+// The old settings file, imported once.
 static fs::path g_ConfigPath;
 
 static PFUNC_YYGMLScript g_StatFromScore = nullptr;
@@ -30,6 +38,10 @@ bool g_MoveTiers = false;
 bool g_AutoImport = false;
 Appearance g_Appearance;
 bool g_SuppressToggle = false;
+// The switch as Options > Mods last showed it.
+static bool g_SettingVisible = true;
+static bool g_WantSave = false;
+std::string g_Layout;
 
 bool g_Visible = true;
 bool g_Manual = false;
@@ -247,7 +259,7 @@ static bool ReadSlotItem(CInstance* Self, CInstance* Other)
 	return true;
 }
 
-static void LoadConfig()
+static void ResetConfig()
 {
 	g_Targets.clear();
 	g_MaxAttempts = 50;
@@ -260,10 +272,15 @@ static void LoadConfig()
 	g_Presets.clear();
 	g_ActivePreset = -1;
 	g_Appearance = Appearance();
+	g_Layout.clear();
+}
 
+// Before 1.3.0 the settings were in SlormReforger.txt and the window layout in SlormReforger.layout.ini, next to the DLL.
+static bool ImportOldConfig()
+{
 	std::ifstream file(g_ConfigPath);
 	if (!file)
-		return;
+		return false;
 
 	std::string line;
 	while (std::getline(file, line))
@@ -327,44 +344,280 @@ static void LoadConfig()
 		catch (...) { continue; }
 		g_Targets.push_back(target);
 	}
+	std::ifstream layout(g_ConfigPath.parent_path() / "SlormReforger.layout.ini");
+	g_Layout.assign(std::istreambuf_iterator<char>(layout), std::istreambuf_iterator<char>());
+	return true;
 }
 
-void SaveConfig()
+static double NumberAt(const sj::Json& Array, size_t At, double Default)
 {
-	std::ofstream file(g_ConfigPath);
-	file << "# Written by the overlay. One target per line: TIER STAT GOAL\n"
-		"# GOAL is any, max, a number (displayed value to reach), or roll:N.\n";
+	return At < Array.a.size() && Array.a[At].type == sj::Json::Num ? Array.a[At].n : Default;
+}
+
+// Floats as JSON numbers without their binary tail.
+static double Rounded(float Value)
+{
+	return std::round(Value * 10000.0) / 10000.0;
+}
+
+static sj::Json ColorJson(const float* Color)
+{
+	sj::Json color = sj::Json::Array();
+	for (int at = 0; at < 3; at++)
+		color.Push(Rounded(Color[at]));
+	return color;
+}
+
+static void ReadColor(const sj::Json* Saved, float* Color)
+{
+	if (Saved)
+		for (int at = 0; at < 3; at++)
+			Color[at] = static_cast<float>(NumberAt(*Saved, at, Color[at]));
+}
+
+static const char* const GOAL_NAMES[] = { "any", "max", "value", "roll", "share" };
+
+// Over the defaults: anything missing or out of range keeps its default.
+static void ApplyConfig(const sj::Json& Config)
+{
+	if (const sj::Json* targets = Config.Find("targets"))
+		for (const sj::Json& saved : targets->a)
+		{
+			Target target;
+			target.tier = saved.GetStr("tier");
+			target.stat = saved.GetStr("stat");
+			std::string goal = saved.GetStr("goal", "any");
+			auto known = std::find(std::begin(GOAL_NAMES), std::end(GOAL_NAMES), goal);
+			if (target.tier.empty() || target.stat.empty() || known == std::end(GOAL_NAMES))
+				continue;
+			target.goal = static_cast<Goal>(known - std::begin(GOAL_NAMES));
+			target.amount = saved.GetNum("amount", 0);
+			g_Targets.push_back(target);
+		}
+	if (const sj::Json* presets = Config.Find("presets"))
+		for (const sj::Json& saved : presets->a)
+		{
+			Preset preset;
+			std::string error;
+			if (!ParsePreset(saved.GetStr("key"), preset, error))
+				continue;
+			std::string name = saved.GetStr("name");
+			if (!name.empty()) preset.name = name;
+			g_Presets.push_back(std::move(preset));
+		}
+	g_ActivePreset = static_cast<int>(Config.GetNum("active_preset", g_ActivePreset));
+	// Indexed by material id.
+	if (const sj::Json* stock = Config.Find("min_stock"))
+		for (int id = 0; id < MATERIAL_COUNT; id++)
+			g_MinStock[id] = static_cast<int>(NumberAt(*stock, id, g_MinStock[id]));
+	g_MaxAttempts = static_cast<int>(Config.GetNum("max_attempts", g_MaxAttempts));
+	g_AllowPureLoss = Config.GetBool("allow_pure_loss", g_AllowPureLoss);
+	g_AutoLock = Config.GetBool("auto_lock", g_AutoLock);
+	g_AutoAdd = Config.GetBool("auto_add", g_AutoAdd);
+	g_MoveTiers = Config.GetBool("move_tiers", g_MoveTiers);
+	g_AutoImport = Config.GetBool("auto_import", g_AutoImport);
+	g_Appearance.theme = static_cast<int>(Config.GetNum("theme", g_Appearance.theme));
+	g_Appearance.custom_accent = Config.GetBool("custom_accent", false);
+	ReadColor(Config.Find("accent"), g_Appearance.accent);
+	g_Appearance.custom_primary = Config.GetBool("custom_primary", false);
+	ReadColor(Config.Find("primary"), g_Appearance.primary);
+	g_Appearance.opacity = static_cast<float>(Config.GetNum("opacity", g_Appearance.opacity));
+	g_Appearance.scale = static_cast<float>(Config.GetNum("scale", g_Appearance.scale));
+	g_Appearance.show_costs = Config.GetBool("show_costs", g_Appearance.show_costs);
+	double hotkey = Config.GetNum("hotkey", VK_F6);
+	g_Appearance.hotkey = hotkey >= 8 && hotkey <= 254 ? static_cast<int>(hotkey) : VK_F6;
+	g_Layout = Config.GetStr("layout");
+	if (g_ActivePreset < -1 || g_ActivePreset >= static_cast<int>(g_Presets.size()))
+		g_ActivePreset = g_Presets.empty() ? -1 : 0;
+}
+
+static sj::Json ConfigJson()
+{
+	sj::Json config = sj::Json::Object();
+	sj::Json targets = sj::Json::Array();
 	for (const Target& target : g_Targets)
 	{
-		file << target.tier << ' ' << target.stat << ' ';
-		switch (target.goal)
-		{
-		case Goal::Any: file << "any"; break;
-		case Goal::MaxRoll: file << "max"; break;
-		case Goal::Roll: file << "roll:" << target.amount; break;
-		case Goal::Share: file << "share:" << target.amount; break;
-		default: file << target.amount; break;
-		}
-		file << '\n';
+		sj::Json saved = sj::Json::Object();
+		saved.Add("tier", target.tier);
+		saved.Add("stat", target.stat);
+		saved.Add("goal", GOAL_NAMES[static_cast<int>(target.goal)]);
+		if (target.goal != Goal::Any && target.goal != Goal::MaxRoll)
+			saved.Add("amount", target.amount);
+		targets.Push(std::move(saved));
 	}
+	config.Add("targets", std::move(targets));
+	sj::Json presets = sj::Json::Array();
 	for (const Preset& preset : g_Presets)
-		file << "preset " << preset.key << ' ' << preset.name << '\n';
-	for (int id = 0; id < MATERIAL_COUNT; id++)
-		if (g_MinStock[id] > 0) file << "min_stock " << id << ' ' << g_MinStock[id] << '\n';
-	file << "max_attempts " << g_MaxAttempts << '\n'
-		<< "allow_pure_loss " << (g_AllowPureLoss ? 1 : 0) << '\n'
-		<< "auto_lock " << (g_AutoLock ? 1 : 0) << '\n'
-		<< "auto_add " << (g_AutoAdd ? 1 : 0) << '\n'
-		<< "move_tiers " << (g_MoveTiers ? 1 : 0) << '\n'
-		<< "auto_import " << (g_AutoImport ? 1 : 0) << '\n'
-		<< "active_preset " << g_ActivePreset << '\n'
-		<< "theme " << g_Appearance.theme << '\n'
-		<< "accent " << (g_Appearance.custom_accent ? 1 : 0) << ' ' << g_Appearance.accent[0] << ' ' << g_Appearance.accent[1] << ' ' << g_Appearance.accent[2] << '\n'
-		<< "primary " << (g_Appearance.custom_primary ? 1 : 0) << ' ' << g_Appearance.primary[0] << ' ' << g_Appearance.primary[1] << ' ' << g_Appearance.primary[2] << '\n'
-		<< "opacity " << g_Appearance.opacity << '\n'
-		<< "scale " << g_Appearance.scale << '\n'
-		<< "show_costs " << (g_Appearance.show_costs ? 1 : 0) << '\n'
-		<< "hotkey " << g_Appearance.hotkey << '\n';
+	{
+		sj::Json saved = sj::Json::Object();
+		saved.Add("key", preset.key);
+		saved.Add("name", preset.name);
+		presets.Push(std::move(saved));
+	}
+	config.Add("presets", std::move(presets));
+	config.Add("active_preset", g_ActivePreset);
+	sj::Json stock = sj::Json::Array();
+	for (int reserve : g_MinStock)
+		stock.Push(reserve);
+	config.Add("min_stock", std::move(stock));
+	config.Add("max_attempts", g_MaxAttempts);
+	config.Add("allow_pure_loss", g_AllowPureLoss);
+	config.Add("auto_lock", g_AutoLock);
+	config.Add("auto_add", g_AutoAdd);
+	config.Add("move_tiers", g_MoveTiers);
+	config.Add("auto_import", g_AutoImport);
+	config.Add("theme", g_Appearance.theme);
+	config.Add("custom_accent", g_Appearance.custom_accent);
+	config.Add("accent", ColorJson(g_Appearance.accent));
+	config.Add("custom_primary", g_Appearance.custom_primary);
+	config.Add("primary", ColorJson(g_Appearance.primary));
+	config.Add("opacity", Rounded(g_Appearance.opacity));
+	config.Add("scale", Rounded(g_Appearance.scale));
+	config.Add("show_costs", g_Appearance.show_costs);
+	config.Add("hotkey", g_Appearance.hotkey);
+	config.Add("layout", g_Layout);
+	return config;
+}
+
+static sj::Json Command(const char* Name)
+{
+	sj::Json command = sj::Json::Object();
+	command.Add("cmd", Name);
+	return command;
+}
+
+// The request's result; nothing when SlormAPI refuses it (logged).
+static std::optional<sj::Json> Request(const sj::Json& Command)
+{
+	const char* reply = g_Api->Request(sj::Dump(Command).c_str());
+	try
+	{
+		sj::Json parsed = sj::Parse(reply ? reply : "");
+		if (!parsed.GetBool("ok", false))
+		{
+			Log("%s failed: %s", Command.GetStr("cmd").c_str(), parsed.GetStr("error", "no reply").c_str());
+			return std::nullopt;
+		}
+		const sj::Json* result = parsed.Find("result");
+		return result ? *result : sj::Json();
+	}
+	catch (const std::exception& error)
+	{
+		Log("%s: bad reply: %s", Command.GetStr("cmd").c_str(), error.what());
+		return std::nullopt;
+	}
+}
+
+// Everything but the switch under Options > Mods lives in SlormAPI's data file for the mod.
+static void StoreConfig()
+{
+	sj::Json command = Command("mod_data");
+	command.Add("mod", MOD_NAME);
+	command.Add("value", ConfigJson());
+	Request(command);
+}
+
+// Saved from the next step: SlormAPI takes requests only on the game thread.
+void SaveConfig()
+{
+	g_WantSave = true;
+}
+
+// The saved settings, or the old files' the first time.
+static void LoadConfig()
+{
+	ResetConfig();
+	sj::Json command = Command("mod_data");
+	command.Add("mod", MOD_NAME);
+	std::optional<sj::Json> saved = Request(command);
+	if (!saved)
+		return;
+	if (saved->type == sj::Json::Obj)
+	{
+		ApplyConfig(*saved);
+		return;
+	}
+	if (!ImportOldConfig())
+		return;
+	Log("imported %d targets and %d presets from %s", static_cast<int>(g_Targets.size()), static_cast<int>(g_Presets.size()), g_ConfigPath.string().c_str());
+	StoreConfig();
+}
+
+static void SetSetting(const char* Key, bool Value)
+{
+	sj::Json command = Command("set_setting");
+	command.Add("mod", MOD_NAME);
+	command.Add("key", Key);
+	command.Add("value", Value);
+	Request(command);
+}
+
+// Once per frame on the game thread, after the player moved a switch under Options > Mods.
+static void SettingChanged(const char* Event, const char* DataJson, void* User)
+{
+	try
+	{
+		sj::Json data = sj::Parse(DataJson ? DataJson : "");
+		if (data.GetStr("mod") != MOD_NAME)
+			return;
+		std::lock_guard guard(g_Lock);
+		if (data.GetStr("key") == "visible")
+			g_Visible = g_SettingVisible = data.GetBool("value", g_Visible);
+	}
+	catch (const std::exception& error)
+	{
+		Log("bad setting event: %s", error.what());
+	}
+}
+
+// The hotkey and the window's close button change the switch too; Options > Mods follows them.
+static void SyncSettings()
+{
+	if (g_Visible == g_SettingVisible)
+		return;
+	g_SettingVisible = g_Visible;
+	SetSetting("visible", g_Visible);
+}
+
+// Lists the mod on the MODS page, loads its settings and puts a switch under Options > Mods; false without SlormAPI.
+static bool Register()
+{
+	AurieInterfaceBase* base = nullptr;
+	if (!AurieSuccess(ObGetInterface(SLORMAPI_INTERFACE_NAME, base)) || !base)
+		return false;
+	g_Api = static_cast<SlormAPIInterface*>(base);
+	std::lock_guard guard(g_Lock);
+
+	sj::Json registration = Command("register_mod");
+	registration.Add("name", MOD_NAME);
+	registration.Add("file", "SlormReforger.dll");
+	registration.Add("version", SLORMREFORGER_VERSION);
+	registration.Add("author", "Crash");
+	registration.Add("description", "Reforges at Friedrich's until your targets are met");
+	sj::Json needs = sj::Json::Object();
+	needs.Add("SlormAPI", "1.0.0");
+	registration.Add("requires", std::move(needs));
+	registration.Add("game", "1.0.2c");
+	Request(registration);
+
+	LoadConfig();
+	// SlormAPI's tab cuts a help line past about fifty characters.
+	sj::Json setting = sj::Json::Object();
+	setting.Add("key", "visible");
+	setting.Add("label", "Show the window");
+	setting.Add("help", "With an item to reforge; F6 unless changed");
+	setting.Add("type", "bool");
+	setting.Add("default", true);
+	sj::Json settings = sj::Json::Array();
+	settings.Push(std::move(setting));
+	sj::Json command = Command("register_settings");
+	command.Add("mod", MOD_NAME);
+	command.Add("settings", std::move(settings));
+	std::optional<sj::Json> values = Request(command);
+	g_Visible = g_SettingVisible = values ? values->GetBool("visible", true) : true;
+	if (!g_Api->Subscribe("setting_changed", SettingChanged, nullptr))
+		Log("the switch under Options > Mods will not take effect until the game restarts");
+	return true;
 }
 
 // Best roll for a tier. Percent stats scale down on low-level items.
@@ -1141,6 +1394,13 @@ static void Tick(CInstance* Self, CInstance* Other)
 	}
 	g_KeyWasDown = key_down;
 
+	SyncSettings();
+	if (g_WantSave)
+	{
+		g_WantSave = false;
+		StoreConfig();
+	}
+
 	if (g_WantStop && g_Running)
 		Stop("stopped by you");
 	if (g_WantStart && !g_Running)
@@ -1479,12 +1739,20 @@ static void CodeCallback(FWCodeEvent& Event)
 		step_code = code;
 	}
 
-	// The swap chain only exists once the game is running.
-	static bool installed = false;
-	if (!installed)
+	// Modules load in any order, so SlormAPI is asked for from the first step, not at load;
+	// the swap chain for the overlay also only exists once the game is running.
+	static bool tried = false;
+	if (!g_Api)
 	{
-		installed = true;
-		Log("step callback active, overlay hook %s", OverlayInstall(g_Yytk) ? "installed" : "FAILED");
+		if (tried)
+			return;
+		tried = true;
+		if (!Register())
+		{
+			DbgPrintEx(LOG_SEVERITY_ERROR, "[SlormReforger] SlormAPI is not loaded; the mod needs it");
+			return;
+		}
+		Log("connected to SlormAPI, %d presets, overlay hook %s", static_cast<int>(g_Presets.size()), OverlayInstall(g_Yytk) ? "installed" : "FAILED");
 	}
 
 	// Input aimed at the overlay must not reach the game's UI.
@@ -1520,10 +1788,8 @@ EXPORTED AurieStatus ModuleInitialize(
 		return AURIE_MODULE_DEPENDENCY_NOT_RESOLVED;
 
 	g_ConfigPath = ModulePath.parent_path() / "SlormReforger.txt";
-	// Presets in the config are read against the stat table.
+	// Saved presets are read against the stat table, from the first step.
 	LoadGameData();
-	LoadConfig();
-	OverlaySetIniPath((ModulePath.parent_path() / "SlormReforger.layout.ini").string());
 
 	g_StatFromScore = FindScript("gml_Script_scr_loot_stat_from_score");
 	g_Apply = FindScript("gml_Script_scr_blacksmith_recipe_apply");
@@ -1542,7 +1808,6 @@ EXPORTED AurieStatus ModuleInitialize(
 		return status;
 	}
 
-
-	Log("v" SLORMREFORGER_VERSION " loaded, %d stats, key %d shows/hides the overlay, config %s", static_cast<int>(g_Stats.size()), g_Appearance.hotkey, g_ConfigPath.string().c_str());
+	Log("v" SLORMREFORGER_VERSION " loaded, %d stats", static_cast<int>(g_Stats.size()));
 	return AURIE_SUCCESS;
 }

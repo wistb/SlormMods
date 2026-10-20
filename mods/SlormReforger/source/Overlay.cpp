@@ -11,7 +11,6 @@ extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg
 static bool g_Ready = false;
 static ID3D11Device* g_Device = nullptr;
 static ID3D11DeviceContext* g_Context = nullptr;
-static std::string g_IniPath;
 static HWND g_Window = nullptr;
 static WNDPROC g_OriginalProc = nullptr;
 // Latched once per frame so the game sees a steady answer.
@@ -48,11 +47,6 @@ static const char* TIER_NAMES[] = { "Normal", "Defense", "Magic", "Rare", "Epic"
 constexpr int TIER_COUNT = 10;
 static const char* SPECIAL_GOAL_NAMES[] = { "Stat only", "Max roll", "Value at least" };
 static const char* GOAL_NAMES[] = { "Stat only", "Max roll", "Value at least", "Roll at least" };
-
-void OverlaySetIniPath(const std::string& Path)
-{
-	g_IniPath = Path;
-}
 
 const char* TierName(const std::string& Code)
 {
@@ -968,6 +962,13 @@ static void DrawRun()
 static void DrawWindow()
 {
 	std::lock_guard guard(g_Lock);
+	ImGuiIO& io = ImGui::GetIO();
+	if (io.WantSaveIniSettings)
+	{
+		io.WantSaveIniSettings = false;
+		g_Layout = ImGui::SaveIniSettingsToMemory();
+		SaveConfig();
+	}
 	ImGui::SetNextWindowPos({ 40, 40 }, ImGuiCond_FirstUseEver);
 	// The id after ### keeps the saved position when the title changes.
 	if (!ImGui::Begin("SlormReforger v" SLORMREFORGER_VERSION "###SlormReforger", g_HasItem ? &g_Visible : &g_Manual, ImGuiWindowFlags_AlwaysAutoResize))
@@ -1032,7 +1033,12 @@ static void Frame(IDXGISwapChain* swapchain, UINT flags)
 
 		ImGui::CreateContext();
 		ImGuiIO& io = ImGui::GetIO();
-		io.IniFilename = g_IniPath.empty() ? nullptr : g_IniPath.c_str();
+		// No ini file: the layout is kept with the settings in SlormAPI's data file.
+		io.IniFilename = nullptr;
+		{
+			std::lock_guard guard(g_Lock);
+			ImGui::LoadIniSettingsFromMemory(g_Layout.c_str(), g_Layout.size());
+		}
 		ApplyAppearance();
 		g_Window = description.OutputWindow;
 		ImGui_ImplWin32_Init(g_Window);

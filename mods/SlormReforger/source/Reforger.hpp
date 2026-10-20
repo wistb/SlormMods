@@ -194,7 +194,10 @@ std::vector<std::pair<std::string, std::string>> SpecialStats(const std::string&
 const PoolEntry* FindInPool(const std::string& Tier, const std::string& Stat);
 double MaxRoll(const std::string& Tier, const std::string& Stat);
 const char* MaterialName(int Id);
+// Asks for the settings to be saved from the next step.
 void SaveConfig();
+// The overlay's window layout, saved with the settings.
+extern std::string g_Layout;
 std::vector<std::pair<int, int>> ParseCost(const std::string& Spec);
 int TargetState(const Target& Target, std::string& Text);
 int AddRank(const std::string& Tier);
@@ -222,4 +225,3 @@ bool LegendaryGains(int Id, double From, double To);
 bool OverlayInstall(YYTK::YYTKInterface* Yytk);
 bool OverlayWantsMouse();
 bool OverlayWantsKeys();
-void OverlaySetIniPath(const std::string& Path);
