@@ -1,0 +1,13 @@
+This download contains the following components.
+
+MapReveal
+  https://github.com/wistb/SlormMods/tree/main/mods/MapReveal
+  GNU Affero General Public License v3.0 (AGPL-3.0.txt)
+  File: mods\Aurie\MapReveal.dll
+
+Runs on the Aurie Framework and YYToolkit, a separate download;
+SlormAPI, also separate, is optional.
+
+SlormAPI's JSON header (Json.hpp, 1.0.0), compiled into MapReveal.dll
+  https://github.com/tsotsas/SlormAPI
+  GNU Affero General Public License v3.0 (AGPL-3.0.txt)

@@ -1,0 +1,6 @@
+#pragma once
+
+#define MAPREVEAL_MAJOR 1
+#define MAPREVEAL_MINOR 0
+#define MAPREVEAL_PATCH 0
+#define MAPREVEAL_VERSION "1.0.0"
