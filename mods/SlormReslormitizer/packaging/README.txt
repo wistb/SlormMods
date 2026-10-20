@@ -1,7 +1,6 @@
 SlormReslormitizer
-Operates Rick Manalan's Slormitizer in The Slormancer: loads the
-Slormandrites that make reaching a reinforce level cheapest, and
-reinforces.
+Reinforces your equipment at Rick Manalan's Slormitizer in The
+Slormancer, with the cheapest Slormandrites for the level you want.
 
 REQUIREMENTS
   The Slormancer on Steam (Windows, 64-bit)
@@ -22,41 +21,29 @@ INSTALL
 
 USE
   Open the Slormitizer at Rick Manalan and click the slormite left of
-  its item slot: the options take the place of the character page, and
-  the inventory beside them stays in use.
+  its item slot. The options open in place of the character page, and
+  your inventory stays beside them. Hover anything to see what it does.
 
-  Plan        The Slormandrites of Fate, Aptitude, Virtue and Harmony
-              to load from your stock: the load that makes reaching
-              the level you set the cheapest on average, counting
-              goldus, Slormandrites and slormites at their purchase
-              price. It knows a success spends the item's potential,
-              a Critical Reinforce refills it, a failure zeroes it and
-              a Double Reinforce skips a level.
-  Floors      The chance of success, Critical Reinforce and Double
-              Reinforce every activation must reach at least, and the
-              Failure it must stay under. None by default; the plan is
-              the cheapest way within them.
-  Slormite    Use whichever slormite is in the Slormitizer, or choose
-              one. More are loaded when it runs out, and lower
-              slormites can be merged up into the one in use.
-  Load        Puts the plan in the Slormitizer. Nothing is spent.
-  Reinforce   Loads the plan and activates the Slormitizer once.
+  Floors      Optional limits on the odds of every reinforce. None by
+              default: the plan then goes for the lowest cost.
+  Slormite    The one in the Slormitizer, or one you choose. More are
+              loaded when it runs out, and lower ones can be merged up.
+  Repeat      The level Repeat stops at. Hold Shift for steps of 10,
+  stops at    Ctrl for 100.
+  Load        Puts the planned Slormandrites in the Slormitizer.
+  Reinforce   Loads the plan and reinforces once.
   once
-  Repeat      Keeps reinforcing until the item reaches the level you
-              set, or the stock can no longer get there.
+  Repeat      Reinforces until the item reaches that level.
 
-  Nothing is activated unless the numbers the game itself shows are
-  the ones the plan foresaw.
+  The plan counts goldus, Slormandrites and slormites, and nothing is
+  activated unless the game's odds match it.
 
 UNINSTALL
   Delete mods\Aurie\SlormReslormitizer.dll and
-  SlormReslormitizer-README.txt from the game folder; SlormAPI keeps
-  your settings in mods\Aurie\SlormAPI\data\SlormReslormitizer.json.
-  The game's own files are never changed.
+  SlormReslormitizer-README.txt from the game folder. Your settings are
+  in mods\Aurie\SlormAPI\data\SlormReslormitizer.json. The game's own
+  files are never changed.
 
 FILES IN THIS ZIP
   mods\Aurie\SlormReslormitizer.dll   the mod
   mods\licenses\                      license and source of the above
-
-Created while playing: aurie.log, and through SlormAPI
-mods\Aurie\SlormAPI\data\SlormReslormitizer.json (your settings).

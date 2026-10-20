@@ -5,8 +5,10 @@ SlormReslormitizer
   GNU Affero General Public License v3.0 (AGPL-3.0.txt)
   File: mods\Aurie\SlormReslormitizer.dll
 
-Runs on the Aurie Framework and YYToolkit, a separate download.
+Runs on the Aurie Framework, YYToolkit and SlormAPI, separate
+downloads.
 
-Dear ImGui v1.91.9b, compiled into SlormReslormitizer.dll
-  https://github.com/ocornut/imgui
-  MIT License (DearImGui-MIT.txt)
+SlormAPI's JSON header (Json.hpp, 1.0.0), compiled into
+SlormReslormitizer.dll
+  https://github.com/tsotsas/SlormAPI
+  GNU Affero General Public License v3.0 (AGPL-3.0.txt)

@@ -1,27 +1,33 @@
 # SlormReslormitizer
 
-Operates Rick Manalan's Slormitizer in [The Slormancer](https://store.steampowered.com/app/1104280/The_Slormancer/): loads the Slormandrites that make reaching a reinforce level cheapest, and reinforces.
+Reinforces your equipment at Rick Manalan's Slormitizer in [The Slormancer](https://store.steampowered.com/app/1104280/The_Slormancer/). On [Nexus Mods](https://www.nexusmods.com/theslormancer/mods/16).
 
-Open the Slormitizer and click the slormite left of its item slot: the options take the place of the character page, and the inventory beside them stays in use.
+Click the slormite left of the Slormitizer's item slot and set the level you want. The mod loads the cheapest Slormandrites to get there and reinforces, once or until the item reaches that level.
 
-- **Plan.** The Slormandrites of Fate, Aptitude, Virtue and Harmony to load from your stock: the load that makes reaching the level you set the cheapest on average, counting goldus, the Slormandrites and the slormites at their purchase price. It knows that a success spends the item's potential, that a Critical Reinforce refills it, that a failure zeroes it, and that a Double Reinforce skips a level, so it may take a risk now to save on the goes after it. Slormelines, Negation and True Potential you load yourself are left in place.
-- **Floors.** The chance of success, Critical Reinforce and Double Reinforce every activation must reach at least, and the Failure it must stay under. None by default; set them when a risk is not worth any saving, and the plan is the cheapest way within them.
-- **Slormite.** Use whichever slormite is in the Slormitizer, or choose one. More are loaded when it runs out, and lower slormites can be merged up into the one in use, as on Rick's Merge Slormites tab.
-- **Load.** Puts the plan in the Slormitizer. Nothing is spent.
-- **Reinforce once.** Loads the plan and activates the Slormitizer.
-- **Repeat.** Keeps reinforcing until the item reaches the level you set, or the stock can no longer get there.
+![The slormite next to the Slormitizer's item slot](nexus/paneltoggle.png)
 
-Nothing is activated unless the numbers the game itself shows are the ones the plan foresaw.
+![The panel](nexus/panel.png)
+
+- Plans the whole reinforcement, counting goldus, Slormandrites and slormites.
+- Optional floors on the odds of every reinforce.
+- Loads more slormites when they run out, and can merge lower ones up.
+- Never activates unless the game's odds match the plan.
+
+## Requirements
+
+- The Slormancer on Steam (Windows, 64-bit).
+- [SlormAPI](https://github.com/tsotsas/SlormAPI/releases) 1.0.0 or later.
+- The Microsoft Visual C++ 2015-2022 Redistributable (x64).
 
 ## Install
 
 1. Back up your save: `%LocalAppData%\The_Slormancer`
-2. Install [SlormAPI](https://github.com/tsotsas/SlormAPI/releases) 1.0.0 or later with its installer, which also sets up the Aurie loader. The mod needs it.
-3. Download the latest `SlormReslormitizer` zip from [Releases](https://github.com/wistb/SlormMods/releases).
-4. Extract it into the game folder, so `SlormReslormitizer.dll` lands in `mods\Aurie`.
-5. Start the game from Steam as usual.
+2. Install SlormAPI with its installer, if you have not yet.
+3. Download the latest `SlormReslormitizer` zip from [Releases](https://github.com/wistb/SlormMods/releases) or [Nexus Mods](https://www.nexusmods.com/theslormancer/mods/16), and extract it into the game folder, so `SlormReslormitizer.dll` lands in `mods\Aurie`.
 
-The game's own files are never changed. To uninstall, delete `mods\Aurie\SlormReslormitizer.dll`; SlormAPI keeps the settings in `mods\Aurie\SlormAPI\data\SlormReslormitizer.json`.
+## Uninstall
+
+Delete `mods\Aurie\SlormReslormitizer.dll`.
 
 ## Build
 
@@ -34,6 +40,6 @@ Needs Windows with VS 2022 Build Tools (C++ workload), run from WSL.
 ./build.sh package  # dist/SlormReslormitizer-v<version>.zip
 ```
 
-`SLORM_DEV=1` builds the dev variant, which logs the game's Slormitizer calls and samples its odds on F10.
+`SLORM_DEV=1` builds the dev variant, which logs the game's Slormitizer calls and samples its odds on F10. The optimizer's checks build with g++: `make -C mods/SlormReslormitizer/tests test`.
 
 Built on [Aurie](https://github.com/AurieFramework/Aurie), [YYToolkit](https://github.com/AurieFramework/YYToolkit) and [SlormAPI](https://github.com/tsotsas/SlormAPI); see [THIRD-PARTY.md](../../THIRD-PARTY.md). Licensed under AGPL-3.0.
