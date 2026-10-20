@@ -8,7 +8,7 @@ The floor is never iced and the hero never slides, wherever the cataclysm would 
 
 1. Back up your save: `%LocalAppData%\The_Slormancer`
 2. If the game does not load Aurie mods yet, install the Aurie loader. The easiest way is the installer from [SlormAPI](https://github.com/tsotsas/SlormAPI/releases).
-3. Download the latest `NoSlipperyIce` zip from [Releases](https://github.com/crashv0/SlormMods/releases).
+3. Download the latest `NoSlipperyIce` zip from [Releases](https://github.com/wistb/SlormMods/releases).
 4. Extract it into the game folder, so `NoSlipperyIce.dll` lands in `mods\Aurie`.
 5. Start the game from Steam as usual.
 

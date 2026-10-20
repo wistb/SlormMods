@@ -584,7 +584,7 @@ static int PressedKey()
 // About links. An empty address shows the name greyed out until there is a page to point at.
 static const char* LINK_AUTHOR = "https://discord.com/users/187106829984202761";
 static const char* LINK_NEXUS = "https://www.nexusmods.com/theslormancer/mods/2";
-static const char* LINK_GITHUB = "https://github.com/crashv0/SlormMods/tree/main/mods/SlormReforger";
+static const char* LINK_GITHUB = "https://github.com/wistb/SlormMods/tree/main/mods/SlormReforger";
 
 static void Link(const char* Label, const char* Url)
 {

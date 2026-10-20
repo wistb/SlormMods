@@ -32,7 +32,7 @@ Requires The Slormancer on Steam (Windows, 64-bit) and the [Microsoft Visual C++
 
 1. Back up your save folder: `%LocalAppData%\The_Slormancer`
 2. If the game does not load Aurie mods yet, install the Aurie loader. The easiest way is the installer from [SlormAPI](https://github.com/tsotsas/SlormAPI/releases).
-3. Download the latest `SlormReforger` zip from [Releases](https://github.com/crashv0/SlormMods/releases).
+3. Download the latest `SlormReforger` zip from [Releases](https://github.com/wistb/SlormMods/releases).
 4. Open the game folder. In Steam: right-click the game, Manage, Browse local files.
 5. Extract the zip there, so `SlormReforger.dll` lands in `mods\Aurie`.
 6. Start the game from Steam as usual.

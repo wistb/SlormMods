@@ -240,7 +240,7 @@ static bool DrawOptions()
 
 	ImGui::SeparatorText("About");
 	ImGui::TextUnformatted("SlormReslormitizer v" SLORMRESLORMITIZER_VERSION " by Crash");
-	ImGui::TextLinkOpenURL("GitHub", "https://github.com/crashv0/SlormMods/tree/main/mods/SlormReslormitizer");
+	ImGui::TextLinkOpenURL("GitHub", "https://github.com/wistb/SlormMods/tree/main/mods/SlormReslormitizer");
 	return changed || restyle;
 }
 

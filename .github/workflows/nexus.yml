@@ -21,7 +21,22 @@ jobs:
       TAG: ${{ github.event.release.tag_name || inputs.tag }}
       GH_TOKEN: ${{ github.token }}
     steps:
+      # Only a mod with a Nexus page has its ids set; the others are released on GitHub alone.
+      # GitHub keeps variable names in upper case.
+      - name: Check for a Nexus page
+        id: page
+        env:
+          VARS: ${{ toJSON(vars) }}
+        run: |
+          MOD="${TAG%-v*}"
+          if [ -n "$(jq -r --arg k "NEXUS_MOD_ID_${MOD^^}" '.[$k] // empty' <<< "$VARS")" ]; then
+            echo "upload=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "$MOD has no Nexus page; nothing to upload"
+          fi
+
       - name: Download the release zip
+        if: steps.page.outputs.upload
         run: |
           MOD="${TAG%-v*}"
           gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern "$MOD-*.zip"
@@ -31,6 +46,7 @@ jobs:
 
       # The release notes are a bullet list; Nexus gets the lines without the dashes.
       - name: Read the changelog
+        if: steps.page.outputs.upload
         run: |
           {
             echo "CHANGELOG<<CHANGELOG_END"
@@ -40,6 +56,7 @@ jobs:
 
       # v1.0.0-beta.10
       - name: Upload to Nexus Mods
+        if: steps.page.outputs.upload
         uses: Nexus-Mods/upload-action@c96019556046053aa26044b44396cd38929daf23
         with:
           api_key: ${{ secrets.NEXUSMODS_API_KEY }}

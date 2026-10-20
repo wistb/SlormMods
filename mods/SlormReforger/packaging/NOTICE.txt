@@ -1,7 +1,7 @@
 This download contains the following components.
 
 SlormReforger
-  https://github.com/crashv0/SlormMods/tree/main/mods/SlormReforger
+  https://github.com/wistb/SlormMods/tree/main/mods/SlormReforger
   GNU Affero General Public License v3.0 (AGPL-3.0.txt)
   File: mods\Aurie\SlormReforger.dll
 
