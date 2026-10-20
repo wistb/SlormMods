@@ -158,7 +158,10 @@ extern std::vector<Build> g_Builds;
 extern int g_ActiveBuild;
 bool ParseBuild(const std::string& Text, Build& Out, std::string& Error);
 
+// Asks for the settings to be saved from the next step.
 void SaveConfig();
+// The overlay's window layout, saved with the settings.
+extern std::string g_Layout;
 
 // One line of an equipped item: a stat in its tier, or the reaper smith, mastery, attribute or legendary by id.
 struct LiveAffix
@@ -329,4 +332,3 @@ const std::map<int, WarlordInfo>& Warlords();
 bool OverlayInstall(YYTK::YYTKInterface* Yytk);
 bool OverlayWantsMouse();
 bool OverlayWantsKeys();
-void OverlaySetIniPath(const std::string& Path);

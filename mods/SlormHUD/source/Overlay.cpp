@@ -12,7 +12,6 @@ extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg
 static bool g_Ready = false;
 static ID3D11Device* g_Device = nullptr;
 static ID3D11DeviceContext* g_Context = nullptr;
-static std::string g_IniPath;
 static HWND g_Window = nullptr;
 static WNDPROC g_OriginalProc = nullptr;
 // Latched once per frame so the game sees a steady answer.
@@ -34,11 +33,6 @@ static BOOL WINAPI HookedCursor(LPPOINT Point)
 	return ok;
 }
 static LRESULT CALLBACK WindowProc(HWND Window, UINT Message, WPARAM WParam, LPARAM LParam);
-
-void OverlaySetIniPath(const std::string& Path)
-{
-	g_IniPath = Path;
-}
 
 // Rarity colours as the game shows them.
 static ImVec4 TierColor(const std::string& Code, const std::string& Stat = "")
@@ -840,6 +834,13 @@ static bool DrawNether()
 static void DrawWindow()
 {
 	std::lock_guard guard(g_Lock);
+	ImGuiIO& io = ImGui::GetIO();
+	if (io.WantSaveIniSettings)
+	{
+		io.WantSaveIniSettings = false;
+		g_Layout = ImGui::SaveIniSettingsToMemory();
+		SaveConfig();
+	}
 	bool open = true;
 	ImGui::SetNextWindowPos({ 40, 40 }, ImGuiCond_FirstUseEver);
 	ImGui::SetNextWindowSizeConstraints({ 0, 0 }, { FLT_MAX, ImGui::GetIO().DisplaySize.y * 0.8f });
@@ -907,7 +908,12 @@ static void Frame(IDXGISwapChain* swapchain, UINT flags)
 
 		ImGui::CreateContext();
 		ImGuiIO& io = ImGui::GetIO();
-		io.IniFilename = g_IniPath.empty() ? nullptr : g_IniPath.c_str();
+		// No ini file: the layout is kept with the settings in SlormAPI's data file.
+		io.IniFilename = nullptr;
+		{
+			std::lock_guard guard(g_Lock);
+			ImGui::LoadIniSettingsFromMemory(g_Layout.c_str(), g_Layout.size());
+		}
 		ApplyAppearance();
 		g_Window = description.OutputWindow;
 		ImGui_ImplWin32_Init(g_Window);

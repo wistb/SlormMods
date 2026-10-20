@@ -93,7 +93,7 @@ Thickness, size and position of every kind of outline, where the rank and Nether
 Requires The Slormancer on Steam (Windows, 64-bit) and the [Microsoft Visual C++ 2015-2022 Redistributable (x64)](https://aka.ms/vs/17/release/vc_redist.x64.exe).
 
 1. Back up your save folder: `%LocalAppData%\The_Slormancer`
-2. If the game does not load Aurie mods yet, install the Aurie loader. The easiest way is the installer from [SlormAPI](https://github.com/tsotsas/SlormAPI/releases).
+2. Install [SlormAPI](https://github.com/tsotsas/SlormAPI/releases) 1.0.0 or later with its installer, if you have not yet. It sets up the Aurie loader, and SlormHUD needs it.
 3. Download the latest `SlormHUD` zip from [Releases](https://github.com/wistb/SlormMods/releases) or [Nexus Mods](https://www.nexusmods.com/theslormancer/mods/3).
 4. Open the game folder. In Steam: right-click the game, Manage, Browse local files.
 5. Extract the zip there, so `SlormHUD.dll` lands in `mods\Aurie`.
@@ -109,7 +109,7 @@ To uninstall, delete `mods\Aurie\SlormHUD.dll` and `SlormHUD-README.txt` from th
 2. Play a character of the build's class. Open the ancestral legacy map, the skill screen or the inventory, and the build is drawn on it.
 3. Work toward green. The Build tab lists the same comparison, section by section.
 
-F4 shows or hides the outlines and the Netherworld text on the game's screens. Both keys can be changed on the Options tab.
+F4 shows or hides the outlines and the Netherworld text on the game's screens. Both keys can be changed on the Options tab, and both switches are also under Options > Mods in the game.
 
 Mastery levels, reaper and rune levels, item level, reinforcement and pure stats are not compared.
 
@@ -117,7 +117,7 @@ Mastery levels, reaper and rune levels, item level, reinforcement and pure stats
 
 The Slormancer is a GameMaker game. The mod is a plugin for [YYToolkit](https://github.com/AurieFramework/YYToolkit), which runs on the [Aurie Framework](https://github.com/AurieFramework/Aurie). SlormHUD reads the character from the game's own variables, and the outlines are drawn with the game's drawing functions at the end of its interface pass, placed from the list of clickable areas the game keeps for each screen. The window is drawn with [Dear ImGui](https://github.com/ocornut/imgui).
 
-The frameworks are not part of the mod; [SlormAPI](https://github.com/tsotsas/SlormAPI)'s installer sets them up.
+Builds and options are kept by [SlormAPI](https://github.com/tsotsas/SlormAPI), which also lists the mod on the game's MODS page. The frameworks are not part of the mod; SlormAPI's installer sets them up.
 
 ## Building
 
