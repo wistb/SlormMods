@@ -49,7 +49,6 @@ On the ESP tab. Marks every open breach on the map.
 - **Markers.** A line from the hero, a circle, and name and distance text, colored by kind of breach.
 - **Nearest breach.** An arrow by the hero pointing at it.
 - **Hide key.** F8 shows or hides every drawing.
-- **Reveal map.** The minimap and the large map show the whole map and its icons from the start of a floor. It has its own switch and works with the drawings off.
 
 ### Auto open chests
 
