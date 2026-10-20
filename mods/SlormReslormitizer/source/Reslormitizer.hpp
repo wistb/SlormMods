@@ -1,11 +1,15 @@
 #pragma once
 #include <YYToolkit/YYTK_Shared.hpp>
+#include <SlormAPI/SlormAPI_Interface.hpp>
+#include <SlormAPI/Json.hpp>
 #include <deque>
-#include <mutex>
+#include <optional>
 #include <string>
 #include <vector>
 
 extern YYTK::YYTKInterface* g_Yytk;
+extern SlormAPIInterface* g_Api;
+constexpr const char* MOD_NAME = "SlormReslormitizer";
 
 template <typename... Args>
 void Log(const char* Format, Args... Arguments)
@@ -25,21 +29,6 @@ YYTK::RValue Variable(YYTK::CInstance* Self, const char* Name);
 // A game script by its name without the gml_Script_ prefix; null when the game has none.
 YYTK::PFUNC_YYGMLScript FindScript(const char* Name);
 YYTK::RValue CallScript(YYTK::PFUNC_YYGMLScript Script, YYTK::CInstance* Self, std::vector<YYTK::RValue> Arguments = {});
-
-// Overlay appearance, saved with the rest of the config.
-struct Appearance
-{
-	int theme = 0;
-	bool custom_accent = false;
-	float accent[3] = { 0.78f, 0.62f, 0.25f };
-	// Title bar, tabs, input fields and table headers.
-	bool custom_primary = false;
-	float primary[3] = { 0.16f, 0.29f, 0.48f };
-	float opacity = 0.95f;
-	float scale = 1.0f;
-	// Virtual-key code that shows or hides the overlay.
-	int hotkey = 0x77;
-};
 
 // Material ids as the game numbers them: 0-4 are the Slormelines.
 enum Material { FATE = 5, NEGATION = 6, TRUE_POTENTIAL = 7, APTITUDE = 8, HARMONY = 9, VIRTUE = 10, MATERIAL_COUNT = 11 };
@@ -110,40 +99,33 @@ struct Settings
 	bool merge_up = false;
 };
 
-// Guards everything below; the game step writes it, the overlay reads and edits it.
-extern std::recursive_mutex g_Lock;
-extern Appearance g_Appearance;
-// Set while the hotkey is being rebound, so the key press does not also toggle the overlay.
-extern bool g_SuppressToggle;
-// With Rick's panel open the overlay shows unless hidden with the hotkey (g_Visible);
-// elsewhere it shows only when opened with the hotkey (g_Manual).
-extern bool g_Visible;
-extern bool g_Manual;
+// Everything below runs on the game thread: the step and SlormAPI's events.
 extern Settings g_Settings;
 extern Machine g_Machine;
 extern Plan g_Plan;
 extern bool g_Running;
-// Asked for by the overlay, done on the next step.
+// Asked for by the panel, done on the next step.
 extern bool g_WantLoad, g_WantOnce, g_WantRun, g_WantStop, g_WantMerge;
 extern std::string g_Status;
 extern std::deque<std::string> g_Notes;
 
-inline bool OverlayShown()
-{
-	return g_Machine.open ? g_Visible : g_Manual;
-}
 // The loaded Slormandrites match the plan.
 bool PlanLoaded();
 // There is enough in the machine, or chosen, to start.
 bool CanStart();
 // What is shown meets the targets.
 bool TargetsMet();
-void SaveConfig();
-
-bool OverlayInstall(YYTK::YYTKInterface* Yytk);
-bool OverlayWantsMouse();
-bool OverlayWantsKeys();
-void OverlaySetIniPath(const std::string& Path);
+sj::Json Command(const char* Name);
+// The request's result; nothing when SlormAPI is missing or refuses it (logged).
+std::optional<sj::Json> Request(const sj::Json& Command);
+// Registers the mod and its settings with SlormAPI; false without SlormAPI.
+bool PanelStart();
+// Takes the clicks on the panel before the game's step sees them.
+void PanelInput(YYTK::CInstance* Self);
+// Closes the panel when Rick's or the character page closes; from here, tooltips wait for the panel.
+void PanelTick(YYTK::CInstance* Self);
+// After the UI's draw event: the switch, the panel, and the tooltips held back since the step.
+void PanelDraw(YYTK::CInstance* Self);
 
 #ifdef SLORM_DEV
 // Dev builds only: logs how the game runs the Slormitizer and samples its odds.

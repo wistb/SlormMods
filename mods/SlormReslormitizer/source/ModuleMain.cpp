@@ -3,13 +3,11 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdarg>
-#include <fstream>
 #include <sstream>
 using namespace Aurie;
 using namespace YYTK;
 
 YYTKInterface* g_Yytk = nullptr;
-static fs::path g_ConfigPath;
 
 static PFUNC_YYGMLScript g_Result = nullptr;
 static PFUNC_YYGMLScript g_Potential = nullptr;
@@ -17,11 +15,6 @@ static PFUNC_YYGMLScript g_Move = nullptr;
 static PFUNC_YYGMLScript g_Activate = nullptr;
 static PFUNC_YYGMLScript g_Merge = nullptr;
 
-std::recursive_mutex g_Lock;
-Appearance g_Appearance;
-bool g_SuppressToggle = false;
-bool g_Visible = true;
-bool g_Manual = false;
 Settings g_Settings;
 Machine g_Machine;
 Plan g_Plan;
@@ -178,55 +171,6 @@ static void Note(const char* Format, ...)
 	g_Notes.emplace_back(text);
 	if (g_Notes.size() > 60)
 		g_Notes.pop_front();
-}
-
-static void LoadConfig()
-{
-	std::ifstream file(g_ConfigPath);
-	if (!file)
-		return;
-	std::string line;
-	while (std::getline(file, line))
-	{
-		std::istringstream words(line);
-		std::string first;
-		if (!(words >> first) || first[0] == '#')
-			continue;
-		if (first == "chance") words >> g_Settings.chance;
-		else if (first == "critical") words >> g_Settings.critical;
-		else if (first == "double") words >> g_Settings.twice;
-		else if (first == "failure") words >> g_Settings.failure;
-		else if (first == "until_level") words >> g_Settings.until_level;
-		else if (first == "slormite") { words >> g_Settings.slormite; g_Settings.slormite = std::clamp(g_Settings.slormite, 0, SLORMITE_TIERS); }
-		else if (first == "reload") { int flag = 1; words >> flag; g_Settings.reload = flag != 0; }
-		else if (first == "merge_up") { int flag = 0; words >> flag; g_Settings.merge_up = flag != 0; }
-		else if (first == "theme") words >> g_Appearance.theme;
-		else if (first == "accent") { int on = 0; words >> on >> g_Appearance.accent[0] >> g_Appearance.accent[1] >> g_Appearance.accent[2]; g_Appearance.custom_accent = on != 0; }
-		else if (first == "primary") { int on = 0; words >> on >> g_Appearance.primary[0] >> g_Appearance.primary[1] >> g_Appearance.primary[2]; g_Appearance.custom_primary = on != 0; }
-		else if (first == "opacity") words >> g_Appearance.opacity;
-		else if (first == "scale") words >> g_Appearance.scale;
-		else if (first == "hotkey") { words >> g_Appearance.hotkey; if (g_Appearance.hotkey < 8 || g_Appearance.hotkey > 254) g_Appearance.hotkey = Appearance().hotkey; }
-	}
-}
-
-void SaveConfig()
-{
-	std::ofstream file(g_ConfigPath);
-	file << "# Written by the overlay.\n"
-		<< "chance " << g_Settings.chance << '\n'
-		<< "critical " << g_Settings.critical << '\n'
-		<< "double " << g_Settings.twice << '\n'
-		<< "failure " << g_Settings.failure << '\n'
-		<< "until_level " << g_Settings.until_level << '\n'
-		<< "slormite " << g_Settings.slormite << '\n'
-		<< "reload " << (g_Settings.reload ? 1 : 0) << '\n'
-		<< "merge_up " << (g_Settings.merge_up ? 1 : 0) << '\n'
-		<< "theme " << g_Appearance.theme << '\n'
-		<< "accent " << (g_Appearance.custom_accent ? 1 : 0) << ' ' << g_Appearance.accent[0] << ' ' << g_Appearance.accent[1] << ' ' << g_Appearance.accent[2] << '\n'
-		<< "primary " << (g_Appearance.custom_primary ? 1 : 0) << ' ' << g_Appearance.primary[0] << ' ' << g_Appearance.primary[1] << ' ' << g_Appearance.primary[2] << '\n'
-		<< "opacity " << g_Appearance.opacity << '\n'
-		<< "scale " << g_Appearance.scale << '\n'
-		<< "hotkey " << g_Appearance.hotkey << '\n';
 }
 
 // The game keeps lists as "a|b|c".
@@ -814,21 +758,6 @@ static void Run(CInstance* Self)
 
 static void Tick(CInstance* Self)
 {
-	std::lock_guard guard(g_Lock);
-
-	static bool key_was_down = false;
-	bool key_down = (GetAsyncKeyState(g_Appearance.hotkey) & 0x8000) != 0;
-	if (g_SuppressToggle)
-	{
-		// Wait for the newly bound key to be released.
-		if (!key_down)
-			g_SuppressToggle = false;
-		key_down = true;
-	}
-	else if (key_down && !key_was_down && GetForegroundWindow() == GetActiveWindow())
-		(g_Machine.open ? g_Visible : g_Manual) = !OverlayShown();
-	key_was_down = key_down;
-
 	// Reading takes a few hundred calls into the game, so not every step while nothing happens.
 	static int since = 0;
 	bool asked = g_WantLoad || g_WantOnce || g_WantRun || g_WantStop || g_WantMerge;
@@ -866,36 +795,46 @@ static void Tick(CInstance* Self)
 // Runs once per frame, after the UI object's Step event.
 static void CodeCallback(FWCodeEvent& Event)
 {
-	// This runs for every event of every object, so compare by pointer once the event is known.
+	// This runs for every event of every object, so compare by pointer once the events are known.
 	static CCode* step_code = nullptr;
+	static CCode* draw_code = nullptr;
 	auto& [self, other, code, argument_count, arguments] = Event.Arguments();
-	if (code != step_code || !code)
+	if (!code)
+		return;
+	if (code != step_code && code != draw_code)
 	{
-		if (step_code || !code || !code->GetName() || std::string_view(code->GetName()) != "gml_Object_obj_ui_next_gen_Step_0")
+		std::string_view name = code->GetName() ? code->GetName() : "";
+		if (!step_code && name == "gml_Object_obj_ui_next_gen_Step_0") step_code = code;
+		else if (!draw_code && name == "gml_Object_obj_ui_next_gen_Draw_64") draw_code = code;
+		else return;
+	}
+	if (code == draw_code)
+	{
+		if (!Event.CalledOriginal()) Event.Call();
+		PanelDraw(self);
+		return;
+	}
+
+	// Modules load in any order, so SlormAPI is asked for from the first step, not at load.
+	static bool tried = false;
+	if (!g_Api)
+	{
+		if (tried)
 			return;
-		step_code = code;
+		tried = true;
+		if (!PanelStart())
+		{
+			DbgPrintEx(LOG_SEVERITY_ERROR, "[SlormReslormitizer] SlormAPI is not loaded; the mod needs it");
+			return;
+		}
+		Log("connected to SlormAPI");
 	}
-
-	// The swap chain only exists once the game is running.
-	static bool installed = false;
-	if (!installed)
-	{
-		installed = true;
-		Log("step callback active, overlay hook %s", OverlayInstall(g_Yytk) ? "installed" : "FAILED");
-	}
-
-	// Input aimed at the overlay must not reach the game's UI.
-	if (OverlayWantsMouse())
-	{
-		g_Yytk->CallBuiltin("mouse_clear", { RValue(1.0) });
-		g_Yytk->CallBuiltin("mouse_clear", { RValue(2.0) });
-	}
-	if (OverlayWantsKeys())
-		g_Yytk->CallBuiltin("io_clear", {});
 
 	// Another mod may have run the event already; running it twice doubles every click.
+	PanelInput(self);
 	if (!Event.CalledOriginal()) Event.Call();
 	Tick(self);
+	PanelTick(self);
 #ifdef SLORM_DEV
 	ProbeTick(self);
 #endif
@@ -909,10 +848,6 @@ EXPORTED AurieStatus ModuleInitialize(
 	g_Yytk = YYTK::GetInterface();
 	if (!g_Yytk)
 		return AURIE_MODULE_DEPENDENCY_NOT_RESOLVED;
-
-	g_ConfigPath = ModulePath.parent_path() / "SlormReslormitizer.txt";
-	LoadConfig();
-	OverlaySetIniPath((ModulePath.parent_path() / "SlormReslormitizer.layout.ini").string());
 
 	g_Result = FindScript("scr_crafter_craft_result");
 	g_Potential = FindScript("scr_get_potential");
@@ -935,6 +870,6 @@ EXPORTED AurieStatus ModuleInitialize(
 		return status;
 	}
 
-	Log("v" SLORMRESLORMITIZER_VERSION " loaded, key %d shows or hides the overlay, config %s", g_Appearance.hotkey, g_ConfigPath.string().c_str());
+	Log("v" SLORMRESLORMITIZER_VERSION " loaded");
 	return AURIE_SUCCESS;
 }

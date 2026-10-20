@@ -4,8 +4,9 @@ cheapest Slormandrites for the odds you ask for, and reinforces.
 
 REQUIREMENTS
   The Slormancer on Steam (Windows, 64-bit)
-  The Aurie mod loader, installed first. The easiest way is SlormAPI's
-  installer: https://github.com/tsotsas/SlormAPI/releases
+  SlormAPI 1.0.0 or later, installed first with its installer, which
+  also sets up the Aurie mod loader:
+  https://github.com/tsotsas/SlormAPI/releases
   Microsoft Visual C++ 2015-2022 Redistributable (x64). Most PCs already
   have it. If the mod does not load, install it from
   https://aka.ms/vs/17/release/vc_redist.x64.exe
@@ -19,9 +20,10 @@ INSTALL
   4. Start the game from Steam as usual
 
 USE
-  Open the Slormitizer at Rick Manalan and put an item in it. The
-  SlormReslormitizer window shows by itself there; F8 hides or shows
-  it, and the key can be changed on the Options tab.
+  Open the Slormitizer at Rick Manalan and click the slormite left of
+  its item slot: the options take the place of the character page, and
+  the inventory beside them stays in use. The same settings are in
+  Options > Mods.
 
   Targets     The chance of success, Critical Reinforce and Double
               Reinforce to reach at least, and the Failure to stay
@@ -42,14 +44,13 @@ USE
 
 UNINSTALL
   Delete mods\Aurie\SlormReslormitizer.dll and
-  SlormReslormitizer-README.txt from the game folder; your settings
-  are the other SlormReslormitizer files in mods\Aurie. The game's own
-  files are never changed.
+  SlormReslormitizer-README.txt from the game folder; SlormAPI keeps
+  your settings in mods\Aurie\SlormAPI\settings\SlormReslormitizer.json.
+  The game's own files are never changed.
 
 FILES IN THIS ZIP
   mods\Aurie\SlormReslormitizer.dll   the mod
   mods\licenses\                      license and source of the above
 
-Created while playing: aurie.log, and in mods\Aurie the files
-SlormReslormitizer.txt (your settings) and
-SlormReslormitizer.layout.ini.
+Created while playing: aurie.log, and through SlormAPI
+mods\Aurie\SlormAPI\settings\SlormReslormitizer.json (your settings).
