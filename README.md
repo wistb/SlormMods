@@ -1,15 +1,15 @@
 # SlormMods
 
-Mods for [The Slormancer](https://store.steampowered.com/app/1104280/The_Slormancer/). Each has its own folder, readme and releases.
+Mods for [The Slormancer](https://store.steampowered.com/app/1104280/The_Slormancer/).
 
 | Mod | What it does | Nexus |
 |---|---|---|
 | [SlormSuite](mods/SlormSuite) | A collection of smaller mods behind one overlay. | |
-| [SlormReforger](mods/SlormReforger) | Automatic reforging at Friedrich's blacksmith. | [page](https://www.nexusmods.com/theslormancer/mods/2) |
-| [SlormHUD](mods/SlormHUD) | Follow a slorm-planner build inside the game. | [page](https://www.nexusmods.com/theslormancer/mods/3) |
-| [SlormReslormitizer](mods/SlormReslormitizer) | Operates Rick Manalan's Slormitizer: the Slormandrites that reach a level cheapest. | [page](https://www.nexusmods.com/theslormancer/mods/16) |
-| [NoSlipperyIce](mods/NoSlipperyIce) | Removes the Slippery Ice cataclysm. | [page](https://www.nexusmods.com/theslormancer/mods/6) |
-| [MapReveal](mods/MapReveal) | Shows the whole map and its icons from the start of a floor. | [page](https://www.nexusmods.com/theslormancer/mods/17) |
+| [SlormReforger](mods/SlormReforger) | Automatic reforging at Friedrich's blacksmith. | [link](https://www.nexusmods.com/theslormancer/mods/2) |
+| [SlormHUD](mods/SlormHUD) | Follow a slorm-planner build inside the game. | [link](https://www.nexusmods.com/theslormancer/mods/3) |
+| [SlormReslormitizer](mods/SlormReslormitizer) | Operates Rick Manalan's Slormitizer: the Slormandrites that reach a level cheapest. | [link](https://www.nexusmods.com/theslormancer/mods/16) |
+| [NoSlipperyIce](mods/NoSlipperyIce) | Removes the Slippery Ice cataclysm. | [link](https://www.nexusmods.com/theslormancer/mods/6) |
+| [MapReveal](mods/MapReveal) | Shows the whole map and its icons from the start of a floor. | [link](https://www.nexusmods.com/theslormancer/mods/17) |
 
 ## Build
 
